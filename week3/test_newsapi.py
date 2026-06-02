@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 # ============================================
 # 配置区域（请替换为你的实际 Key）
 # ============================================
-API_KEY = "83687c7236471bf4cda9e33c6d6c0e24"  # 替换为你的 NewsAPI Key
+app_key = "83687c7236471bf4cda9e33c6d6c0e24"  # 替换为你的 NewsAPI Key
 BASE_URL = "https://newsapi.org/v2"
 
 # ============================================

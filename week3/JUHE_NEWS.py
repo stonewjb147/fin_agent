@@ -23,7 +23,7 @@ load_dotenv()
 API_URL = "http://v.juhe.cn/toutiao/index"
 
 # 从 .env 读取 AppKey
-APP_KEY = os.getenv("APP_key") or os.getenv("APP_KEY") or os.getenv("JUHE_APPKEY")
+APP_KEY = os.getenv("APP_key") or os.getenv("JUHE_NEWS_API_KEY") or os.getenv("JUHE_APPKEY")
 
 if not APP_KEY:
     raise ValueError("请在 .env 文件中设置 app_key=你的聚合数据AppKey")
