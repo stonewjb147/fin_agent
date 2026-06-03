@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-06-03 08:35:37",
+  "source_file": "/users/stonewjb/fin_agent_projects/data/news_clustered_20260602.json",
+  "total_news": 19,
+  "total_signals": 19,
+  "failed_signals": 0,
+  "direction_distribution": {
+    "看多": 6,
+    "中性": 12,
+    "看空": 1
+  },
+  "top_assets": {
+    "银行板块": 3,
+    "中国平安": 3,
+    "宁夏银行": 2,
+    "谷歌母公司Alphabet": 1,
+    "农业板块": 1
+  },
+  "strength_distribution": {
+    "高": 2,
+    "低": 12,
+    "中": 5
+  },
+  "average_confidence": 0.58,
+  "high_confidence_count": 3,
+  "top_keywords": {
+    "中国平安": 4,
+    "宁夏银行": 2,
+    "人事变动": 2,
+    "银行板块": 2,
+    "巴菲特继任者": 1,
+    "追加投资": 1,
+    "谷歌母公司": 1,
+    "100亿美元": 1,
+    "麦收": 1,
+    "中国力量": 1
+  }
+}
