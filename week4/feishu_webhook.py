@@ -3,7 +3,7 @@
 # 功能：接收飞书推送的消息事件，调用智能体处理，回复消息
 # 使用 Flask 框架，通过 ngrok 暴露到公网
 # ============================================
-
+'''
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -21,7 +21,34 @@ from feishu_agent import process_message
 
 # 导入飞书认证函数
 from feishu_auth import get_tenant_access_token
+'''
+# ============================================
+# 飞书机器人完整服务（Webhook + 定时推送）
+# ============================================
 
+import os as _os
+_os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+from dotenv import load_dotenv
+# 强制从项目根目录加载 .env
+load_dotenv(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", ".env"))
+
+import os
+import json
+import time
+import threading
+import requests
+from datetime import datetime
+
+from flask import Flask, request, jsonify
+import schedule
+
+from feishu_agent import process_message
+from briefing_formatter import (
+    load_latest_briefing,
+    format_briefing_for_feishu,
+    get_signal_summary,
+)
 # ============================================
 # 第 1 步：创建 Flask 应用
 # ============================================
