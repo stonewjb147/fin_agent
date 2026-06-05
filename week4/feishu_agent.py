@@ -30,14 +30,23 @@ print("=" * 50)
 
 print("\n正在连接 DeepSeek 模型...")
 
+# 导入 Langfuse 回调处理器
+from langfuse.callback import CallbackHandler
+
+# 创建 Langfuse 回调处理器
+langfuse_handler = CallbackHandler(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+)
+
+# 创建 DeepSeek 模型，绑定 Langfuse 回调
 llm = ChatDeepSeek(
     model="deepseek-chat",
     temperature=0,
-    api_key=os.getenv("DEEPSEEK_API_KEY")
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    callbacks=[langfuse_handler]  # 关键：绑定 Langfuse 监控
 )
-
-print("DeepSeek 模型连接成功")
-
 # ============================================
 # 第 2 步：定义工具列表
 # ============================================
