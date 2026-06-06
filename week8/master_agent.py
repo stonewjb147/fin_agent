@@ -3,7 +3,7 @@
 # 整合前七周所有模块的 LangGraph 图
 # 今天先搭建框架，周二到周四逐步填充节点逻辑
 # ============================================
-
+from signal_aggregator import aggregate_all_signals
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import sys
@@ -16,7 +16,30 @@ from etf_env import ETFSimEnv
 # ============================================
 # 节点函数（今天先用占位实现，后续填充）
 # ============================================
+# 在文件顶部添加导入
 
+
+# 修改 signal_aggregation_node 函数
+def signal_aggregation_node(state: MasterState) -> MasterState:
+    """节点1：信号汇总——收集四路真实信号"""
+    print("\n📡 [节点1] 信号汇总...")
+    
+    query = state.get("user_query", "当前市场投资机会")
+    
+    # 调用信号汇总模块（获取真实数据）
+    signals = aggregate_all_signals(query)
+    
+    # 存入状态
+    state["rag_signals"] = signals["rag"]
+    state["news_signals"] = signals["news"]
+    state["factor_signals"] = signals["factor"]
+    state["debate_result"] = signals["debate"]
+    
+    state["execution_log"].append("✅ 四路信号汇总完成")
+    print("   ✅ 四路信号汇总完成")
+    
+    return state
+'''
 def signal_aggregation_node(state: MasterState) -> MasterState:
     """节点1：信号汇总——收集 RAG/新闻/因子/辩论 的所有信号"""
     print("\n📡 [节点1] 信号汇总...")
@@ -27,7 +50,7 @@ def signal_aggregation_node(state: MasterState) -> MasterState:
     state["execution_log"].append("✅ 信号汇总完成")
     print("   ✅ 信号汇总完成（占位数据）")
     return state
-
+'''
 def decision_node(state: MasterState) -> MasterState:
     """节点2：决策生成——LLM 综合所有信号生成交易计划"""
     print("\n🧠 [节点2] 决策生成...")
