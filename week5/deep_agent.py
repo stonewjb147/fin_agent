@@ -141,7 +141,8 @@ agent_executor = AgentExecutor(
     memory=memory,
     verbose=True,               # 打印详细推理过程
     handle_parsing_errors=True,
-    max_iterations=10 
+    max_iterations=10
+
    # early_stopping_method="generate"        # 最多 10 步推理
 )
 
