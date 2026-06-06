@@ -1,0 +1,49 @@
+{
+  "initial_cash": 500000,
+  "days": 3,
+  "final_summary": {
+    "initial_cash": 500000,
+    "cash": 500000,
+    "total_assets": 500000,
+    "total_profit": 0,
+    "total_profit_pct": 0.0,
+    "position_count": 0,
+    "trade_count": 0
+  },
+  "daily_records": [
+    {
+      "day": 1,
+      "date": "2026-06-07",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 2,
+      "date": "2026-06-08",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 3,
+      "date": "2026-06-09",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    }
+  ],
+  "trade_history": []
+}
