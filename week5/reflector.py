@@ -259,7 +259,95 @@ def reflect_data_completeness(question: str, collected_data: str, steps_summary:
             "suggestion": ""
         }
 
+# ============================================
+# 带反思的搜索函数（供外部调用）
+# ============================================
 
+def search_with_reflection(goal: str, initial_query: str, max_retries: int = 3) -> str:
+    """
+    执行搜索，如果结果不好则自动换词重试
+    
+    这是一个便捷包装函数，封装了"搜索→检查→改进→重试"的完整循环
+    
+    参数：
+        goal: 搜索目标描述，如"获取茅台最新营收数据"
+        initial_query: 初始搜索关键词
+        max_retries: 最大重试次数（默认 3 次）
+    
+    返回：
+        最终搜索结果字符串
+    """
+    # 从 mcp_tools 导入注册中心
+    from mcp_tools import registry
+    
+    # 当前使用的搜索词
+    current_query = initial_query
+    
+    for attempt in range(1, max_retries + 1):
+        print(f"   搜索尝试 {attempt}/{max_retries}：{current_query}")
+        
+        # 执行搜索
+        result = registry.execute("网络搜索", {"query": current_query})
+        
+        # 检查结果质量
+        reflection = reflect_search_result(goal, current_query, result)
+        quality = reflection.get("quality", "poor")
+        
+        if quality == "good":
+            # 结果满意，直接返回
+            print(f"   ✅ 搜索结果质量：良好")
+            return result
+        else:
+            # 结果不满意
+            reason = reflection.get("reason", "未知")
+            suggestion = reflection.get("suggestion", current_query)
+            print(f"   ⚠️ 搜索结果质量：差（{reason}）")
+            
+            if attempt < max_retries:
+                # 还有重试机会，使用改进后的搜索词
+                print(f"   🔄 改进搜索词：{suggestion}")
+                current_query = suggestion
+            else:
+                # 重试次数用完，返回最后一次结果
+                print(f"   ⚠️ 已达最大重试次数，使用当前结果")
+                return result
+    
+    return result
+
+
+# ============================================
+# 带反思的计算函数（供外部调用）
+# ============================================
+
+def calculate_with_reflection(expression: str, context: str = "") -> str:
+    """
+    执行计算，如果结果异常则提示重新确认数据
+    
+    参数：
+        expression: 计算表达式
+        context: 计算上下文（用于错误提示）
+    
+    返回：
+        计算结果字符串
+    """
+    # 从 mcp_tools 导入注册中心
+    from mcp_tools import registry
+    
+    # 执行计算
+    result = registry.execute("计算器", {"expression": expression})
+    
+    # 检查结果合理性
+    reflection = reflect_calculation_result(expression, result)
+    quality = reflection.get("quality", "poor")
+    
+    if quality == "poor":
+        reason = reflection.get("reason", "")
+        suggestion = reflection.get("suggestion", "")
+        # 在结果后面附加警告
+        result += f"\n⚠️ 警告：{reason}"
+        result += f"\n💡 建议：{suggestion}"
+    
+    return result
 # ============================================
 # 测试代码
 # ============================================
