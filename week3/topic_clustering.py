@@ -32,7 +32,7 @@ data_dir = "/users/stonewjb/fin_agent_projects/data"
 # 找到所有以 news_ 开头、以 .json 结尾的文件
 json_files = [
     f for f in os.listdir(data_dir)
-    if f.startswith("news") and f.endswith(".json")
+    if f.startswith("news_tkshare") and f.endswith(".json")
 ]
 
 # 如果没有找到文件，直接报错退出

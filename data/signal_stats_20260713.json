@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-07-13 19:01:19",
+  "source_file": "/users/stonewjb/fin_agent_projects/data/news_clustered_20260713.json",
+  "total_news": 34,
+  "total_signals": 34,
+  "failed_signals": 0,
+  "direction_distribution": {
+    "中性": 20,
+    "看空": 6,
+    "看多": 8
+  },
+  "top_assets": {
+    "A股": 4,
+    "白酒板块": 3,
+    "美股": 3,
+    "光伏板块": 3,
+    "美联储政策": 3
+  },
+  "strength_distribution": {
+    "低": 16,
+    "中": 16,
+    "高": 2
+  },
+  "average_confidence": 0.58,
+  "high_confidence_count": 6,
+  "top_keywords": {
+    "美联储": 5,
+    "白酒板块": 3,
+    "A股": 3,
+    "美股": 3,
+    "光伏": 3,
+    "来伊份": 2,
+    "主力资金净流出": 2,
+    "下跌": 2,
+    "资金流出": 2,
+    "资金流向": 2
+  }
+}

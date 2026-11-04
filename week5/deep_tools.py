@@ -21,7 +21,7 @@ from tavily import TavilyClient
 _tavily_client = None
 
 def _get_tavily_client():
-    """获取 Tavily 客户端实例（懒加载）"""
+    """获取 Tavily 客户端实例（懒加载：需要加载的时候调入内存）"""
     global _tavily_client
     if _tavily_client is None:
         api_key = os.getenv("TAVILY_API_KEY", "")

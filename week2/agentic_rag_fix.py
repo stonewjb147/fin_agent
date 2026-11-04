@@ -32,7 +32,7 @@ embeddings = HuggingFaceEmbeddings(
     encode_kwargs={'normalize_embeddings': True}
 )
 
-index_dir = "../faiss_index"
+index_dir = "/users/stonewjb/fin_agent_projects/faiss_index"
 vectorstore = FAISS.load_local(
     folder_path=index_dir,
     embeddings=embeddings,
@@ -58,7 +58,7 @@ def search_annual_report(query: str) -> str:
 retrieval_tool = Tool(
     name="年报检索",
     func=search_annual_report,
-    description="当用户询问贵州茅台2025年年报中的具体财务数据、营收、利润、业务情况时，必须使用此工具。输入应该是一个搜索关键词或完整问题。"
+    description="当用户询问贵州茅台2025年年报中的具体财务数据、营收、利润、业务和cfa知识的情况时，必须使用此工具。输入应该是一个搜索关键词或完整问题。语言可以是中文和英文"
 )
 print("检索工具创建完成")
 
@@ -84,7 +84,7 @@ print("[4/4] 正在创建 ReAct 智能体...")
 # 2. 不需要工具时，Thought 后直接接 Final Answer
 # 3. 使用更清晰的格式说明
 
-react_template = """你是一个专业的金融分析师助手，专门分析贵州茅台2025年年报。
+react_template = """你是一个专业的cfa金融分析师助手，专门用cfa知识来分析贵州茅台2025年年报。
 
 【可用工具】
 {tools}
@@ -96,12 +96,12 @@ react_template = """你是一个专业的金融分析师助手，专门分析贵
 请严格按照以下两种格式之一来回答：
 
 格式一（需要使用工具时）：
-Thought: 我需要查询年报数据才能回答这个问题
-Action: 年报检索
+Thought: 我需要查询年报数据和cfa知识才能回答这个问题
+Action: 年报检索和cfa知识检索
 Action Input: 搜索关键词
 Observation: 工具返回的结果
 Thought: 根据检索结果，我现在可以回答问题了
-Final Answer: 基于检索结果的最终答案
+Final Answer: 基于检索结果的最终答案并给出具体知识或年报的引用位置
 
 格式二（不需要使用工具时，如打招呼、闲聊、询问你的能力）：
 Thought: 这是一个简单的打招呼/闲聊问题，不需要查询年报，我直接回答即可
@@ -109,10 +109,10 @@ Final Answer: 你的回复内容
 
 【重要规则】
 1. 用户打招呼（如"你好"）或询问你的能力时，使用格式二，不要调用任何工具
-2. 用户询问年报中的具体数据（如净利润、营收、增长率）时，使用格式一，必须调用"年报检索"工具
-3. 所有财务数据必须来自检索结果，不能编造
+2. 用户询问年报中的具体数据（如净利润、营收、增长率）和cfa知识时，使用格式一，必须调用"年报检索"工具
+3. 所有财务和cfa知识数据必须来自检索结果，不能编造
 4. 如果检索结果中没有用户要的数据，在 Final Answer 中诚实说明
-5. 回答简洁专业，用中文
+5. 回答简洁专业，用中文和英文
 
 【对话历史】
 {chat_history}

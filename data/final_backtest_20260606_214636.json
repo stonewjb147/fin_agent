@@ -1,0 +1,77 @@
+{
+  "timestamp": "20260606_214636",
+  "metrics": {
+    "initial_cash": 500000,
+    "final_value": 500000,
+    "total_return": 0.0,
+    "total_return_pct": 0.0,
+    "annualized_return_pct": 0.0,
+    "sharpe_ratio": -18.89822365046136,
+    "max_drawdown_pct": 0,
+    "win_rate_pct": 0.0,
+    "profit_loss_ratio": Infinity,
+    "trading_days": 5,
+    "total_trades": 0,
+    "mean_daily_return_pct": 0.0,
+    "std_daily_return_pct": 0.01
+  },
+  "daily_records": [
+    {
+      "day": 1,
+      "date": "2026-06-07",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 2,
+      "date": "2026-06-08",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 3,
+      "date": "2026-06-09",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 4,
+      "date": "2026-06-10",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    },
+    {
+      "day": 5,
+      "date": "2026-06-11",
+      "total_assets": 500000,
+      "cash": 500000,
+      "total_profit": 0,
+      "total_profit_pct": 0.0,
+      "position_count": 0,
+      "trade_count_today": 0,
+      "positions": []
+    }
+  ],
+  "trade_history": [],
+  "final_positions": []
+}

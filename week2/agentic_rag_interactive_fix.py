@@ -34,7 +34,7 @@ embeddings = HuggingFaceEmbeddings(
     encode_kwargs={'normalize_embeddings': True}
 )
 
-index_dir = "../faiss_index"
+index_dir = "/users/stonewjb/fin_agent_projects/faiss_index"
 vectorstore = FAISS.load_local(
     folder_path=index_dir,
     embeddings=embeddings,
@@ -46,7 +46,7 @@ def search_annual_report(query: str) -> str:
     """在茅台2025年年报中检索相关信息"""
     docs = vectorstore.similarity_search(query, k=3)
     if not docs:
-        return "年报中没有找到相关信息。"
+        return "年报和cfa知识库中没有找到相关信息。"
     results_list = []
     for i, doc in enumerate(docs, 1):
         results_list.append(f"[来源{i}] {doc.page_content}")
@@ -54,9 +54,9 @@ def search_annual_report(query: str) -> str:
 
 # 检索工具
 retrieval_tool = Tool(
-    name="年报检索",
+    name="年报及cfa检索",
     func=search_annual_report,
-    description="当用户询问贵州茅台2025年年报中的具体财务数据、营收、利润、业务情况时，必须使用此工具。输入应该是一个搜索关键词或完整问题。"
+    description="当用户询问cfa分析方法和贵州茅台2025年年报中的具体财务数据、营收、利润、业务情况时，必须使用此工具。输入应该是一个搜索关键词或完整问题。"
 )
 
 # 大模型
@@ -67,7 +67,7 @@ llm = ChatDeepSeek(
 )
 
 # 提示词模板
-react_template = """你是一个专业的金融分析师助手，专门分析贵州茅台2025年年报。
+react_template = """你是一个专业cfa持证人，严格按照cfa的专业知识，体系化分析贵州茅台2025年年报，并总结所用到的金融知识。
 
 【可用工具】
 {tools}
@@ -76,15 +76,15 @@ react_template = """你是一个专业的金融分析师助手，专门分析贵
 {tool_names}
 
 【回答格式】
-请严格按照以下两种格式之一来回答：
+请严格按照以下两种格式之一来严格回答：
 
 格式一（需要使用工具时）：
-Thought: 我需要查询年报数据才能回答这个问题
-Action: 年报检索
+Thought: 我需要查询年报数据及cfa知识库内容才能回答这个问题
+Action: 年报及cfa知识检索
 Action Input: 搜索关键词
 Observation: 工具返回的结果
 Thought: 根据检索结果，我现在可以回答问题了
-Final Answer: 基于检索结果的最终答案
+Final Answer: 基于检索结果的最终答案并列出基于cfa的知识要点，并给出检索源
 
 格式二（不需要使用工具时，如打招呼、闲聊）：
 Thought: 这是一个简单的打招呼/闲聊问题，不需要查询年报，我直接回答即可
@@ -122,7 +122,7 @@ agent_executor = AgentExecutor(
     memory=memory,
     verbose=False,
     handle_parsing_errors=True,
-    max_iterations=5
+    max_iterations=15
 )
 
 print("✅ 智能体初始化完成！")

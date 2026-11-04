@@ -38,7 +38,7 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 # 从本地加载 FAISS 索引
-index_dir = "../faiss_index"  #这个目录下没有faiss_index
+index_dir = "/users/stonewjb/fin_agent_projects/faiss_index"  #这个目录下没有faiss_index
 print(f"正在从 {index_dir} 加载索引...")
 vectorstore = FAISS.load_local(
     folder_path=index_dir,
@@ -72,11 +72,11 @@ print("=" * 50)
 # 定义提示词模板
 # {context} 会被自动替换为检索到的文档内容
 # {question} 会被替换为用户的问题
-template = """你是一个专业的金融分析师，请根据以下年报内容回答问题。
+template = """你是一个专业的cfa金融分析师，请根据以下内容回答问题。
 
-如果年报内容中没有相关信息，请直接说"根据提供的年报内容，无法找到相关信息"，不要编造答案。
+如果内容中没有相关信息，请直接说"根据提供的内容，无法找到相关信息"，不要编造答案。
 
-年报内容：
+内容：
 {context}
 
 问题：{question}
@@ -106,9 +106,9 @@ print("=" * 50)
 
 # 测试问题列表
 test_questions = [
-    "贵州茅台2025年的净利润是多少？",
-    "公司2025年的营业收入同比增长了多少？",
-    "茅台2025年的分红方案是什么？"
+    "Board of Directors介绍？",
+    "mac duration introduction？",
+    "Private limited companies tend to have some restrictions on ownership but pass-through taxation like partnerships. Public limited companies have no ownership restrictions, but their income can be taxed at both the company and shareholder level. While public limited companies do not have to go public by selling their shares on an exchange, it is this form that is most suitable for becoming a publicly traded company.？"
 ]
 
 # 逐个提问并打印结果

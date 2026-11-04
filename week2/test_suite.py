@@ -105,7 +105,7 @@ except Exception as e:
 print("\n【测试 4】DeepSeek API 连接")
 try:
     llm = ChatDeepSeek(
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         temperature=0,
         api_key=os.getenv("DEEPSEEK_API_KEY")
     )

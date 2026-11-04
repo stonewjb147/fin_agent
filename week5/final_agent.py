@@ -58,7 +58,7 @@ print("✅ Langfuse 已连接")
 # 大模型
 print("[2/3] 连接 DeepSeek 模型...")
 llm = ChatDeepSeek(
-    model="deepseek-chat",                      # 模型名称
+    model="deepseek-v4-flash",                      # 模型名称
     temperature=0.3,                             # 温度参数
     api_key=os.getenv("DEEPSEEK_API_KEY"),      # API 密钥
     callbacks=[langfuse_handler]                # 绑定监控
@@ -217,12 +217,12 @@ def run_full_analysis(question: str, company_a: str, company_b: str) -> str:
     
     # 搜索行业信息
     result_industry = search_with_reflection(
-        goal="获取白酒行业最新政策、市场趋势、竞争格局",
-        initial_query="白酒行业 2025年 政策 市场趋势 竞争格局"
+        goal="获取光模块行业最新政策、市场趋势、竞争格局",
+        initial_query="光模块行业 2025年 2026年季报 政策 市场趋势 竞争格局，行业技术天花板，龙头企业，发展趋势，护城河，未来空间"
     )
     
     # 将结果追加到数据池
-    collected_data += f"\n## 白酒行业背景\n\n{result_industry}\n"
+    collected_data += f"\n## 电子化学行业背景\n\n{result_industry}\n"
     steps_log.append(f"✅ 步骤{step}: 获取行业数据完成")
     
     # ============================================
@@ -236,7 +236,7 @@ def run_full_analysis(question: str, company_a: str, company_b: str) -> str:
     print(f"\n步骤 {step}：查询白酒板块信号...")
     
     # 从本地信号数据库查询
-    signal_result = registry.execute("金融信号查询", {"asset": "白酒"})
+    signal_result = registry.execute("金融信号查询", {"asset": "光模块"})
     
     # 将结果追加到数据池
     collected_data += f"\n## 本地金融信号\n\n{signal_result}\n"
@@ -394,9 +394,9 @@ if __name__ == "__main__":
     
     # 执行分析
     report = run_full_analysis(
-        question="对比分析贵州茅台和五粮液，哪家公司更具投资价值？",
-        company_a="贵州茅台",
-        company_b="五粮液"
+        question="对比分析光库科技和华工科技，哪家公司更具投资价值？",
+        company_a="光库科技",
+        company_b="华工科技"
     )
     
     # 打印报告

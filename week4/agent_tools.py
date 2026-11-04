@@ -14,6 +14,8 @@ from datetime import datetime
 # 工具1：汇率查询
 # ============================================
 
+
+
 def query_exchange_rate(base_currency: str, target_currency: str) -> str:
     """
     查询两种货币之间的实时汇率

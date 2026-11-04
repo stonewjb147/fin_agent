@@ -6,6 +6,39 @@
 #   - 计算逻辑（Python 代码）
 #   - 验证信息（是否通过回测、夏普比率等）
 # ============================================
+"""
+因子生产线：
+
+
+提出想法 → 定义因子 → 回测验证 → 入库管理
+┌─────────────────────────────────────────────────────────┐
+│                    因子研发全流程                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ① 灵感产生                                              │
+│     研究员发现：ROE高的公司长期收益更好                      │
+│     ↓                                                   │
+│  ② 因子定义（FactorDefinition 实例化）                     │
+│     填写 name / code / data_requirements / parameters    │
+│     ↓                                                   │
+│  ③ 质量自检（is_valid）                                   │
+│     检查必填字段、类型合法性、代码规范性                      │
+│     ↓                                                   │
+│  ④ 入库（to_json → 存入数据库）                            │
+│     validation 状态 = "pending"                          │
+│     ↓                                                   │
+│  ⑤ 回测验证                                              │
+│     用历史数据跑回测，计算夏普/年化收益/最大回撤               │
+│     结果回填到 sharpe_ratio / annual_return / max_drawdown │
+│     ↓                                                   │
+│  ⑥ 状态更新                                              │
+│     validation → "passed" 或 "failed"                    │
+│     ↓                                                   │
+│  ⑦ 投入使用                                              │
+│     通过的因子进入实盘信号系统                               │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+"""
 
 from dataclasses import dataclass, field, asdict  # 数据类装饰器
 from typing import Optional, List  # 类型注解
@@ -180,4 +213,4 @@ if __name__ == "__main__":
     
     # 测试 JSON 序列化
     print(f"\nJSON 输出：")
-  #  print(factor.to_json()[:300])
+    print(factor.to_json()[:300])
