@@ -25,11 +25,16 @@ COPY pyproject.toml ./
 COPY deploy/constraints.txt ./deploy/constraints.txt
 COPY finagent ./finagent
 
+# PyPI is slow or unreachable from mainland China hosts; the mirror is
+# overridable at build time (docker compose build --build-arg PIP_INDEX_URL=...).
+ARG PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
+
 # Editable install is deliberate: finagent.config derives PROJECT_ROOT from
 # __file__, so `pip install .` would point configs/ at site-packages instead
 # of /app and universe.yaml would not be found.
-RUN pip install --upgrade pip \
-    && pip install -c deploy/constraints.txt -e .
+RUN pip install --upgrade pip --index-url "$PIP_INDEX_URL" --retries 5 --timeout 30 \
+    && pip install -c deploy/constraints.txt -e ".[dev]" \
+      --index-url "$PIP_INDEX_URL" --retries 5 --timeout 30
 
 COPY configs ./configs
 COPY scripts ./scripts
