@@ -191,6 +191,9 @@ docker compose run --rm app python -m finagent.cli data-check
 
 docker compose run --rm app python -m finagent.cli snapshot --id <上一步的 snapshot id>
 # 预期：checksum verification: OK
+
+docker compose run --rm app python -m finagent.cli factor-report --date 2026-11-05
+# 预期：3 个因子 × 3 个持有期的 IC/ICIR/t/q 表格，30 秒内跑完
 ```
 
 验证飞书（这一步会真的发一条消息）：
@@ -207,18 +210,20 @@ docker compose run --rm app python -c \
 ```bash
 cd /opt/finagent
 crontab deploy/crontab.example       # 以当前部署用户安装
-crontab -l                            # 确认三条任务
+crontab -l                            # 确认四条任务
 ```
 
 - 18:30 周一~五：`collect_daily.py`
+- 18:40 周一~五：`factor-report`（只读缓存，不联网）
 - 19:10 周一~五：`health_check.py --alert feishu`
-- 周日 03:00：备份 snapshots/quality/configs，保留 8 周
+- 周日 03:00：备份 snapshots/quality/factors/configs，保留 8 周
 
 **先手动演练一次**（不用等到明天）：
 
 ```bash
 cd /opt/finagent
 docker compose run --rm app python scripts/collect_daily.py >> logs/cron.log 2>&1; echo "exit=$?"
+docker compose run --rm app python -m finagent.cli factor-report >> logs/cron.log 2>&1; echo "exit=$?"
 docker compose run --rm app python scripts/health_check.py --alert feishu; echo "exit=$?"
 tail -50 logs/cron.log
 ```
@@ -315,9 +320,9 @@ docker tag finagent:0.1.0 finagent:$(git rev-parse --short HEAD)
 
 ## 13. 备份与恢复
 
-备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality configs` 到 `backups/`，保留 56 天。
+备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality data/factors configs` 到 `backups/`，保留 56 天。
 
-- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康报告）、`configs`、`.env`（单独保管）。
+- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康/因子报告）、`data/factors`（因子面板）、`configs`、`.env`（单独保管）。
 - **不必备份**：`data/cache` 可由源重建；`faiss_index` 不在本次部署。
 - 需要异地容灾时，把 `backups/` 同步到腾讯云 COS（`coscmd upload -r backups/ /finagent-backups/`）。
 

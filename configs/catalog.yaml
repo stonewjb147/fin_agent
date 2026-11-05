@@ -48,7 +48,7 @@ datasets:
     source: akshare.stock_zh_index_daily_em (push2his)
     frequency: daily
     key: index code
-    fields: [date, open, high, low, close, volume]
+    fields: [date, index_code, open, high, low, close, volume, amount]
     coverage: index-dependent
     license: public web data, personal research use
     notes: Some indices (e.g. 000140) are not published here; see index_data flag.
@@ -75,7 +75,7 @@ datasets:
     source: akshare.stock_fund_flow_industry (THS)
     frequency: daily snapshot
     key: as_of date
-    fields: [sector, change_pct, net_inflow, net_inflow_ratio, turnover]
+    fields: [date, sector, pct_change, net_inflow, inflow, outflow, company_count]
     coverage: from first collection day
     license: public web data, personal research use
     notes: >
@@ -99,7 +99,7 @@ datasets:
     source: akshare.stock_market_fund_flow
     frequency: daily
     key: cn
-    fields: [date, main_net_inflow, main_net_ratio, super_large_net_inflow, large_net_inflow]
+    fields: [date, sh_close, sh_pct, sz_close, sz_pct, main_net_inflow, main_net_inflow_pct, super_large_net_inflow, large_net_inflow, medium_net_inflow, small_net_inflow]
     coverage: vendor-dependent
     license: public web data, personal research use
     notes: Market-level only.
@@ -126,7 +126,7 @@ datasets:
     source: akshare.macro_china_pmi / _cpi / _ppi / _money_supply / _lpr
     frequency: monthly
     key: pmi|cpi|ppi|m2|lpr
-    fields: [period_end, available_at, value]
+    fields: [date, period_end, name, value, available_at]
     coverage: 2018..present
     license: public web data, personal research use
     notes: >

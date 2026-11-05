@@ -10,7 +10,7 @@
 |---|---|
 | Phase 0 工程骨架（包结构 / CLI / pytest / eval smoke / CI gate） | 完成 |
 | Phase 1 真实数据层（Parquet 缓存 / manifest / 快照血缘 / 质量校验 / 健康检查） | 完成 |
-| Phase 2 因子内核（动量 / 反转 / 波动 → IC/ICIR / 多重检验） | 下一步 |
+| Phase 2 因子内核（动量 / 反转 / 波动 → IC/ICIR / 多重检验） | 完成 |
 | Phase 3 组合构建 + 结构化信号 + 预测账本 | 计划中 |
 | Phase 4 真实回测（T+1 / 成本 / CPCV / DSR / PBO） | 计划中 |
 | Phase 6 LLM 报告与评测、Phase 7 风控合规、Phase 8~10 成长闭环 | 计划中 |
@@ -36,6 +36,9 @@ python -m finagent.cli data-check
 
 # 查看 / 校验快照 checksum
 python -m finagent.cli snapshot --id snap-20261105-908f0422
+
+# 因子报告：只读缓存，产出 data/factors/<date>.parquet + data/quality/factor_report_<date>.json
+python -m finagent.cli factor-report --date 2026-11-05 --horizons 1,5,20
 
 # 每日任务（cron 入口）与飞书告警
 python scripts/collect_daily.py
@@ -74,6 +77,7 @@ docker compose run --rm app python scripts/health_check.py --alert feishu
 3. 指数估值覆盖不全（部分国证/深证指数无免费数据），缺失记为 `NaN + coverage`，不伪造。
 4. ETF 池为当前存续池，存在存续偏差；`configs/universe.yaml` 每月归档一次。
 5. `snapshot_id` 贯穿 data → factors → portfolio → backtest → signals → report，回测只读快照。
+6. 因子口径：因子值保持原始方向（`direction` 只做解读），IC 是每日截面 Spearman 秩相关；信号 T 日收盘生成、T+1 执行，所以前向收益是 `P(t+1+h)/P(t+1)-1`；重叠收益用 Newey-West（滞后 `max(h-1, 4*(n/100)^(2/9))`）；9 个检验统一做 BH-FDR（q=0.10），不按单因子宣称显著。
 
 ## 目录
 
