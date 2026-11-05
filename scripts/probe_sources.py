@@ -28,11 +28,25 @@ TODAY = date.today()
 START = (TODAY - timedelta(days=400)).strftime("%Y%m%d")
 END = TODAY.strftime("%Y%m%d")
 
+# fund_etf_scale_sse only publishes on trading days; probing a weekend returns
+# an empty frame that looks like a broken endpoint.
+SCALE_DATE = TODAY - timedelta(days=3)
+while SCALE_DATE.weekday() >= 5:
+    SCALE_DATE -= timedelta(days=1)
+
+
+def probe_etf_nav():
+    """AKShare's fund_etf_fund_info_em breaks on an upstream column change, so
+    the provider calls the Eastmoney endpoint directly. Probe that path."""
+    from finagent.data.akshare_provider import AkshareProvider
+
+    return AkshareProvider().etf_nav("510300", TODAY - timedelta(days=400), TODAY)
+
 
 def _probe(fn, args, kwargs):
     import akshare as ak
 
-    target = getattr(ak, fn)
+    target = fn if callable(fn) else getattr(ak, fn)
     t0 = time.time()
     df = target(*args, **kwargs)
     elapsed = time.time() - t0
@@ -73,7 +87,7 @@ def _probe(fn, args, kwargs):
 PROBES = [
     ("etf_hist_hfq", "fund_etf_hist_em", ("510300",), {"period": "daily", "start_date": START, "end_date": END, "adjust": "hfq"}),
     ("etf_spot", "fund_etf_spot_em", (), {}),
-    ("etf_nav", "fund_etf_fund_info_em", (), {"fund": "510300", "start_date": START, "end_date": END}),
+    ("etf_nav", probe_etf_nav, (), {}),
     ("index_hist", "index_zh_a_hist", (), {"symbol": "000300", "period": "daily", "start_date": START, "end_date": END}),
     ("index_value_csindex", "stock_zh_index_value_csindex", (), {"symbol": "000300"}),
     ("index_hist_csindex", "stock_zh_index_hist_csindex", (), {"symbol": "000300", "start_date": START, "end_date": END}),
@@ -90,7 +104,7 @@ PROBES = [
     ("macro_m2", "macro_china_money_supply", (), {}),
     ("macro_lpr", "macro_china_lpr", (), {}),
     ("bond_10y", "bond_zh_us_rate", (), {"start_date": START}),
-    ("etf_scale_sse", "fund_etf_scale_sse", (), {"date": (TODAY - timedelta(days=5)).strftime("%Y%m%d")}),
+    ("etf_scale_sse", "fund_etf_scale_sse", (), {"date": SCALE_DATE.strftime("%Y%m%d")}),
 ]
 
 
