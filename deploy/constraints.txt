@@ -1,0 +1,7 @@
+# Versions verified against the live free sources on 2026-11-05.
+# akshare is pinned exactly because its column names and endpoints drift
+# between releases; the contract tests in tests/test_provider_normalize.py
+# encode the current schema.
+akshare==1.18.64
+pandas==2.2.*
+numpy==1.26.*

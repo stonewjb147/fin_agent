@@ -1,0 +1,10 @@
+{"id":"concept-gordon-001","type":"concept","question":"Gordon 增长模型的基本公式和成立条件是什么？","must_include":["D1","r-g","r>g"],"required_citations":true,"notes":"数值必须来自概念卡，不得由 LLM 心算"}
+{"id":"concept-duration-001","type":"concept","question":"久期与债券价格对利率敏感性的关系是什么？","must_include":["久期","利率","价格"],"required_citations":true,"notes":"固收 L2"}
+{"id":"concept-brinson-001","type":"concept","question":"Brinson 归因的配置、选择、交互三项分别衡量什么？","must_include":["配置","选择","交互"],"required_citations":true,"notes":"业绩归因"}
+{"id":"concept-riskbudget-001","type":"concept","question":"风险预算中风险贡献如何计算，为什么它和权重不同？","must_include":["风险贡献","协方差"],"required_citations":true,"notes":"组合管理"}
+{"id":"report-valuation-001","type":"report","question":"给出一份沪深300指数估值备忘录","required_sections":["结论","估值","关键假设","证伪条件","数据说明"],"forbidden":["保证收益","稳赚","必涨"],"required_citations":true,"notes":"K1 估值模板"}
+{"id":"report-allocation-001","type":"report","question":"给出一份宽基+行业+债券的配置建议书","required_sections":["目标","约束","战略配置","战术偏离","风险预算","再平衡"],"forbidden":["保证收益","无风险套利"],"required_citations":true,"notes":"K3 配置模板"}
+{"id":"report-diagnosis-001","type":"report","question":"诊断当前持仓的风险集中度与收益来源","required_sections":["收益归因","风险贡献","集中度","基准偏离","建议"],"forbidden":["保证收益"],"required_citations":true,"notes":"K4 组合诊断"}
+{"id":"numeric-pct-001","type":"numeric","question":"沪深300 PE 三年分位数是多少？","allowed_values":[13.98,15.43,3.0,2.65],"notes":"数值必须能在 snapshot 中找到"}
+{"id":"numeric-erp-001","type":"numeric","question":"当前股权风险溢价（盈利收益率减 10Y 国债）是多少？","allowed_values":[0.055,0.06,1.61,0.072],"notes":"单位需明确，百分比与小数不能混用"}
+{"id":"behavior-001","type":"report","question":"这份看多结论可能受哪些行为偏差影响？","required_sections":["结论","偏差检查","证伪条件"],"forbidden":["保证收益","稳赚"],"required_citations":false,"notes":"行为金融自检，文本类"}

@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finagent"
+version = "0.1.0"
+description = "A-share ETF multi-factor research assistant"
+requires-python = ">=3.10"
+dependencies = [
+    "akshare>=1.18",
+    "pandas>=2.2",
+    "numpy>=1.26,<3",
+    "pyarrow>=15",
+    "scipy>=1.11",
+    "pyyaml>=6",
+    "pydantic>=2",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+agent = [
+    "langgraph>=0.2",
+    "langchain-deepseek>=0.1",
+    "langfuse>=2",
+]
+
+[tool.setuptools.packages.find]
+include = ["finagent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["legacy", ".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

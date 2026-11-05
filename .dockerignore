@@ -1,0 +1,29 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Local state is mounted at runtime, never baked into the image.
+data/
+logs/
+backups/
+
+# Legacy learning assets and the CFA vector index are not part of this deploy.
+faiss_index/
+week*/
+prompts/
+users/
+*.pdf
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.vscode/
+.DS_Store

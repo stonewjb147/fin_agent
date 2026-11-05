@@ -1,0 +1,172 @@
+"""Command-line entry point.
+
+Phase 1 implements `collect`, `data-check` and `snapshot`. Later phases add
+factor-report / valuation / portfolio / attribution / backtest / daily; they
+are registered now so the interface is stable, but exit with a clear message
+instead of pretending to work.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import date
+from pathlib import Path
+
+from finagent import config
+from finagent.data.akshare_provider import default_provider
+from finagent.data.collect import collect
+from finagent.data.health import check_health
+from finagent.data.lineage import SnapshotStore
+from finagent.data.universe import load_universe
+
+
+def _parse_date(value: str) -> date:
+    return date.fromisoformat(value)
+
+
+def _universe(path: str | None):
+    universe = load_universe(path or config.CONFIG_DIR / "universe.yaml")
+    problems = universe.validate()
+    if problems:
+        print("Universe validation failed:", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        raise SystemExit(2)
+    return universe
+
+
+def cmd_collect(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    start = _parse_date(args.start)
+    end = _parse_date(args.end) if args.end else provider.last_trading_day()
+    if start > end:
+        print("start must be <= end", file=sys.stderr)
+        return 2
+
+    print(f"Collecting {start} .. {end}  universe={universe.version} ({len(universe.for_date(end))} ETFs)")
+    result = collect(
+        provider,
+        universe,
+        start,
+        end,
+        snapshots=args.snapshots,
+        force=args.force,
+    )
+
+    print(f"\nDatasets written : {len(result.datasets)}")
+    print(f"Failures         : {len(result.failures)}")
+    if result.snapshot_id:
+        print(f"Snapshot         : {result.snapshot_id}")
+    if result.quality_path:
+        print(f"Quality report   : {result.quality_path}")
+
+    errors = [f for f in result.failures if f["kind"] == "error"]
+    coverage = [f for f in result.failures if f["kind"] == "coverage"]
+    if coverage:
+        print("\nCoverage gaps (expected for some indices):")
+        for f in coverage[:10]:
+            print(f"  - {f['dataset']}/{f['key']}: {f['message'][:110]}")
+    if errors:
+        print("\nErrors:")
+        for f in errors:
+            print(f"  - {f['dataset']}/{f['key']}: {f['message'][:160]}")
+        return 1
+    return 0
+
+
+def cmd_data_check(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    report = check_health(provider, provider.cache, universe, as_of)
+
+    print(f"Data check for {report['as_of']} (last trading day {report['last_trading_day']})")
+    print(f"{'LEVEL':8s} {'DATASET':18s} {'KEY':10s} {'LAST':12s} {'LAG':>5s} {'ROWS':>7s}  MESSAGE")
+    for c in report["checks"]:
+        print(
+            f"{c['level']:8s} {c['dataset']:18s} {c['key']:10s} "
+            f"{str(c['last_date']):12s} {str(c['lag_days']):>5s} {str(c['rows']):>7s}  {c['message']}"
+        )
+    print(f"\nOK={report['ok']} errors={report['errors']} warnings={report['warnings']}")
+
+    out = config.QUALITY_DIR / f"health_{report['as_of']}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Report: {out}")
+    return 0 if report["ok"] else 1
+
+
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    provider = default_provider()
+    store = SnapshotStore(config.SNAPSHOT_DIR)
+    if args.id:
+        snap = store.load(args.id)
+        print(f"snapshot {snap.snapshot_id}  as_of={snap.as_of}  entries={len(snap.entries)}")
+        for e in snap.entries:
+            print(f"  {e.dataset:22s} {e.key:12s} rows={e.rows:<6d} last={e.last_date} sha={e.checksum[:12]}")
+        verification = store.verify(args.id, provider.cache)
+        print(f"\nchecksum verification: {'OK' if verification['ok'] else 'FAILED'}")
+        return 0 if verification["ok"] else 1
+    files = sorted(Path(config.SNAPSHOT_DIR).glob("snap-*.json"))
+    print(f"{len(files)} snapshots in {config.SNAPSHOT_DIR}")
+    for f in files[-10:]:
+        print(f"  {f.stem}")
+    return 0
+
+
+def _planned(phase: str):
+    def run(_: argparse.Namespace) -> int:
+        print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
+        return 2
+
+    return run
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="finagent", description="A-share ETF research assistant")
+    ap.add_argument("--version", action="version", version="finagent 0.1.0")
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("collect", help="fetch data into the Parquet cache and build a snapshot")
+    p.add_argument("--start", default="2022-01-01")
+    p.add_argument("--end", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--snapshots", choices=["auto", "on", "off"], default="auto")
+    p.add_argument("--force", action="store_true", help="ignore today's cache")
+    p.set_defaults(func=cmd_collect)
+
+    p = sub.add_parser("data-check", help="freshness / completeness checks over the cache")
+    p.add_argument("--date", default=None)
+    p.add_argument("--universe", default=None)
+    p.set_defaults(func=cmd_data_check)
+
+    p = sub.add_parser("snapshot", help="inspect or verify a lineage snapshot")
+    p.add_argument("--id", default=None)
+    p.set_defaults(func=cmd_snapshot)
+
+    for name, phase, help_text in (
+        ("factor-report", "Phase 2", "compute and evaluate factors"),
+        ("valuation", "Phase K1", "index valuation dashboard"),
+        ("portfolio", "Phase K3", "IPS -> SAA -> TAA -> weights"),
+        ("attribution", "Phase K4", "Brinson / factor attribution"),
+        ("backtest", "Phase 4", "walk-forward backtest with overfitting diagnostics"),
+        ("daily", "Phase 6", "end-to-end daily research report"),
+    ):
+        p = sub.add_parser(name, help=f"{help_text} ({phase}, planned)")
+        p.set_defaults(func=_planned(phase))
+
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    config.ensure_dirs()
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

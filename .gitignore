@@ -1,10 +1,32 @@
 .env
-#echo "# fin_agent" >> README.md 
-#git init 
-##git add README.md 
-#git commit -m "first commit" 
-#git branch -M main 
+#echo "# fin_agent" >> README.md
+#git init
+##git add README.md
+#git commit -m "first commit"
+#git branch -M main
 #git remote add origin https://github.com/stonewjb147/fin_agent.git
-#git push -u origin main
+#push -u origin main
 faiss_index/
 *.sh
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local data: regenerable from sources, never committed
+data/cache/
+data/quality/
+data/snapshots/
+data/signals/
+data/reports/
+data/portfolio/
+logs/
+backups/
+.DS_Store

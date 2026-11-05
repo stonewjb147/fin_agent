@@ -1,0 +1,143 @@
+# Data catalog: what we collect, from where, how often, and what we know is missing.
+#
+# `available: false` entries are documented gaps, not bugs. They exist so the
+# report can say "data not available" explicitly instead of silently dropping a
+# factor.
+version: c1
+
+datasets:
+  etf_daily_hfq:
+    source: akshare.fund_etf_hist_em (adjust=hfq)
+    frequency: daily
+    key: etf symbol
+    fields: [date, symbol, open, high, low, close, volume, amount, amplitude, pct_change, change, turnover]
+    coverage: 2018-01-01..present
+    license: public web data, personal research use
+    notes: >
+      Full refresh on every run. Adjusted (hfq) history is rewritten whenever a
+      new distribution occurs, so incremental appends would mix vintages.
+
+  etf_nav:
+    source: api.fund.eastmoney.com/f10/lsjz
+    frequency: daily
+    key: etf symbol
+    fields: [date, symbol, nav, acc_nav, nav_change]
+    coverage: fund inception..T-1
+    license: public web data, personal research use
+    notes: Published with a lag; use T-1 for premium/discount, never T.
+
+  etf_spot:
+    source: akshare.fund_etf_category_sina
+    frequency: daily snapshot
+    key: as_of date
+    fields: [symbol, name, price, change_pct, volume, amount]
+    coverage: from first collection day
+    license: public web data, personal research use
+    notes: No history. The series starts the day collection starts.
+
+  etf_scale_sse:
+    source: akshare.fund_etf_scale_sse
+    frequency: daily snapshot
+    key: as_of date
+    fields: [symbol, name, shares, scale]
+    coverage: from first collection day; SSE only
+    license: public web data, personal research use
+    notes: Published with a lag; a same-evening miss is a coverage gap.
+
+  index_daily:
+    source: akshare.stock_zh_index_daily_em (push2his)
+    frequency: daily
+    key: index code
+    fields: [date, open, high, low, close, volume]
+    coverage: index-dependent
+    license: public web data, personal research use
+    notes: Some indices (e.g. 000140) are not published here; see index_data flag.
+
+  index_valuation:
+    source: akshare.stock_zh_index_hist_csindex
+    frequency: daily
+    key: index code
+    fields: [date, pe, pb, dividend_yield]
+    coverage: CSIndex-published indices only
+    license: public web data, personal research use
+    notes: PB and dividend yield are often NaN in the free feed.
+
+  index_value_snapshot:
+    source: akshare.stock_zh_index_value_csindex
+    frequency: daily snapshot
+    key: index code + as_of
+    fields: [date, pe, pb, dividend_yield]
+    coverage: CSIndex-published indices only
+    license: public web data, personal research use
+    notes: Ancillary cross-check against the history endpoint.
+
+  sector_flow_rank:
+    source: akshare.stock_fund_flow_industry (THS)
+    frequency: daily snapshot
+    key: as_of date
+    fields: [sector, change_pct, net_inflow, net_inflow_ratio, turnover]
+    coverage: from first collection day
+    license: public web data, personal research use
+    notes: >
+      Eastmoney push2 endpoints are unreachable on this machine, so this uses
+      THS. Only a current snapshot exists; the history must be accumulated.
+
+  sector_flow_hist:
+    source: none
+    frequency: daily
+    key: sector
+    fields: [date, sector, net_inflow]
+    coverage: unavailable
+    available: false
+    license: n/a
+    notes: >
+      Requires Eastmoney push2 (blocked here) or a THS history endpoint that
+      does not exist publicly. Until resolved, flow factors use accumulated
+      snapshots plus amount/turnover proxies.
+
+  market_flow:
+    source: akshare.stock_market_fund_flow
+    frequency: daily
+    key: cn
+    fields: [date, main_net_inflow, main_net_ratio, super_large_net_inflow, large_net_inflow]
+    coverage: vendor-dependent
+    license: public web data, personal research use
+    notes: Market-level only.
+
+  margin_sse:
+    source: akshare.stock_margin_sse
+    frequency: daily
+    key: sse
+    fields: [date, financing_balance, financing_buy, securities_balance]
+    coverage: SSE only
+    license: public web data, personal research use
+    notes: Market-level, not ETF-level. Do not use as an ETF flow factor.
+
+  bond_yield:
+    source: akshare.bond_zh_us_rate
+    frequency: daily
+    key: cn10y
+    fields: [date, y10]
+    coverage: 2002..present
+    license: public web data, personal research use
+    notes: CN 10Y government yield; used for ERP and duration proxies.
+
+  macro:
+    source: akshare.macro_china_pmi / _cpi / _ppi / _money_supply / _lpr
+    frequency: monthly
+    key: pmi|cpi|ppi|m2|lpr
+    fields: [period_end, available_at, value]
+    coverage: 2018..present
+    license: public web data, personal research use
+    notes: >
+      Point-in-time enforced with publication lags (PMI +1d, CPI/PPI +10d,
+      M2 +15d, LPR +0d). Filter on available_at, never period_end.
+
+  trade_calendar:
+    source: akshare.tool_trade_date_hist_sina
+    frequency: static
+    key: all
+    fields: [date]
+    coverage: 1990..year-end
+    license: public web data, personal research use
+    notes: Forward-looking by design; a "future" last_date is expected.

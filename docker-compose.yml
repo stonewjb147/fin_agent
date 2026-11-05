@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+    image: finagent:${FINAGENT_TAG:-0.1.0}
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+      FINAGENT_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs:ro
+    # Must match the owner of ./data and ./logs; set in .env from `id -u`.
+    user: "${FINAGENT_UID:-1000}:${FINAGENT_GID:-1000}"
+    working_dir: /app
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

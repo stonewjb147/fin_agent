@@ -1,0 +1,131 @@
+# ETF universe, maintained by hand.
+#
+# Why by hand: free sources have no authoritative ETF -> tracked-index field.
+# Every mapping is validated against 60-day return correlation (>0.95) at load
+# time when index data is available.
+#
+# flow_sectors maps an ETF to THS industry names (our working fund-flow source
+# after the Eastmoney push2 endpoints became unreachable). Broad-based ETFs
+# have no flow mapping; they inherit market-level flow instead.
+
+version: u1
+updated_at: "2026-11-05"
+etfs:
+  # --- broad based -------------------------------------------------
+  - symbol: "510300"
+    name: 沪深300ETF
+    category: broad
+    tracked_index: "000300"
+    sector: 宽基
+    benchmark: true
+    effective_from: "2012-05-28"
+  - symbol: "510500"
+    name: 中证500ETF
+    category: broad
+    tracked_index: "000905"
+    sector: 宽基
+    effective_from: "2013-03-15"
+  - symbol: "159915"
+    name: 创业板ETF
+    category: broad
+    tracked_index: "399006"
+    sector: 宽基
+    effective_from: "2011-12-09"
+  - symbol: "588000"
+    name: 科创50ETF
+    category: broad
+    tracked_index: "000688"
+    sector: 宽基
+    effective_from: "2020-11-16"
+  - symbol: "510050"
+    name: 上证50ETF
+    category: broad
+    tracked_index: "000016"
+    sector: 宽基
+    effective_from: "2005-02-23"
+  - symbol: "512100"
+    name: 中证1000ETF
+    category: broad
+    tracked_index: "000852"
+    sector: 宽基
+    effective_from: "2016-11-04"
+
+  # --- sector ------------------------------------------------------
+  - symbol: "512880"
+    name: 证券ETF
+    category: sector
+    tracked_index: "399975"
+    sector: 证券
+    flow_sectors: [证券]
+    effective_from: "2016-08-08"
+  - symbol: "512800"
+    name: 银行ETF
+    category: sector
+    tracked_index: "399986"
+    sector: 银行
+    flow_sectors: [银行]
+    effective_from: "2017-08-03"
+  - symbol: "512690"
+    name: 酒ETF
+    category: sector
+    tracked_index: "399987"
+    sector: 食品饮料
+    flow_sectors: [白酒, 饮料制造]
+    effective_from: "2019-05-06"
+  - symbol: "512010"
+    name: 沪深300医药ETF
+    category: sector
+    tracked_index: "000913"
+    sector: 医药
+    flow_sectors: [化学制药, 生物制品, 医疗器械, 医疗服务, 中药, 医药商业]
+    effective_from: "2013-09-16"
+  - symbol: "512660"
+    name: 军工ETF
+    category: sector
+    tracked_index: "399967"
+    sector: 国防军工
+    flow_sectors: [军工装备, 军工电子]
+    effective_from: "2016-08-08"
+  - symbol: "512170"
+    name: 医疗ETF
+    category: sector
+    tracked_index: "399989"
+    sector: 医疗
+    flow_sectors: [医疗服务, 医疗器械]
+    effective_from: "2019-06-17"
+  - symbol: "515790"
+    name: 光伏ETF
+    category: sector
+    tracked_index: "931151"
+    sector: 电力设备
+    flow_sectors: [光伏设备]
+    effective_from: "2020-12-07"
+  - symbol: "512400"
+    name: 有色金属ETF
+    category: sector
+    tracked_index: "000819"
+    sector: 有色金属
+    flow_sectors: [工业金属, 贵金属, 小金属, 能源金属, 金属新材料]
+    effective_from: "2017-09-01"
+
+  # --- bond / commodity / cross-border ------------------------------
+  - symbol: "511010"
+    name: 国债ETF
+    category: bond
+    tracked_index: "000140"
+    sector: 利率债
+    # SSE 5Y treasury index: no usable daily series from the free index APIs
+    index_data: false
+    effective_from: "2013-03-25"
+  - symbol: "518880"
+    name: 黄金ETF
+    category: commodity
+    tracked_index: AU9999
+    sector: 黄金
+    effective_from: "2013-07-29"
+  - symbol: "513100"
+    name: 纳指ETF
+    category: cross_border
+    tracked_index: NDX
+    sector: 海外科技
+    effective_from: "2013-05-15"
