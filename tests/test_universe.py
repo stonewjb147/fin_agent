@@ -52,6 +52,26 @@ etfs:
     assert "no benchmark ETF declared" in problems
 
 
+def test_index_data_false_exempts_missing_tracked_index(tmp_path):
+    path = tmp_path / "etfs.yaml"
+    path.write_text(
+        """
+etfs:
+  - symbol: "510300"
+    name: 沪深300ETF
+    category: broad
+    tracked_index: "000300"
+    benchmark: true
+  - symbol: "513310"
+    name: 中韩半导体ETF
+    category: cross_border
+    index_data: false
+""",
+        encoding="utf-8",
+    )
+    assert load_universe(path).validate() == []
+
+
 def test_missing_required_field_raises(tmp_path):
     path = tmp_path / "bad.yaml"
     path.write_text('etfs:\n  - symbol: "510300"\n    name: x\n', encoding="utf-8")

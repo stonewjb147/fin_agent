@@ -18,6 +18,7 @@ DATA_DIR = Path(os.environ.get("FINAGENT_DATA_DIR", PROJECT_ROOT / "data"))
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
 QUALITY_DIR = DATA_DIR / "quality"
+FACTOR_DIR = DATA_DIR / "factors"
 SIGNAL_DIR = DATA_DIR / "signals"
 REPORT_DIR = DATA_DIR / "reports"
 PORTFOLIO_DIR = DATA_DIR / "portfolio"
@@ -59,7 +60,15 @@ MACRO_PUBLICATION_LAG_DAYS = {
 
 
 def ensure_dirs() -> None:
-    for d in (CACHE_DIR, SNAPSHOT_DIR, QUALITY_DIR, SIGNAL_DIR, REPORT_DIR, PORTFOLIO_DIR):
+    for d in (
+        CACHE_DIR,
+        SNAPSHOT_DIR,
+        QUALITY_DIR,
+        FACTOR_DIR,
+        SIGNAL_DIR,
+        REPORT_DIR,
+        PORTFOLIO_DIR,
+    ):
         d.mkdir(parents=True, exist_ok=True)
 
 

@@ -20,6 +20,7 @@ from finagent.data.collect import collect
 from finagent.data.health import check_health
 from finagent.data.lineage import SnapshotStore
 from finagent.data.universe import load_universe
+from finagent.research.report import format_summary, run_factor_report
 
 
 def _parse_date(value: str) -> date:
@@ -117,6 +118,25 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_factor_report(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    horizons = [int(h) for h in args.horizons.split(",") if h.strip()]
+
+    report = run_factor_report(
+        universe,
+        as_of=as_of,
+        factor_names=args.factors.split(",") if args.factors else None,
+        horizons=horizons,
+        execution_lag=args.execution_lag,
+    )
+    print(format_summary(report))
+    print(f"\nFactors : {report['factor_file']}")
+    print(f"Report  : {report['report_file']}")
+    return 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -147,8 +167,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--id", default=None)
     p.set_defaults(func=cmd_snapshot)
 
+    p = sub.add_parser("factor-report", help="compute factors and evaluate IC / ICIR / HAC t")
+    p.add_argument("--date", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--factors", default=None, help="comma separated, defaults to all price factors")
+    p.add_argument("--horizons", default="1,5,20", help="forward-return horizons in trading days")
+    p.add_argument(
+        "--execution-lag",
+        type=int,
+        default=config.EXECUTION_LAG_DAYS,
+        help="days between signal and execution (default: T+1)",
+    )
+    p.set_defaults(func=cmd_factor_report)
+
     for name, phase, help_text in (
-        ("factor-report", "Phase 2", "compute and evaluate factors"),
         ("valuation", "Phase K1", "index valuation dashboard"),
         ("portfolio", "Phase K3", "IPS -> SAA -> TAA -> weights"),
         ("attribution", "Phase K4", "Brinson / factor attribution"),

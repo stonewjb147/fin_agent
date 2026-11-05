@@ -84,7 +84,9 @@ class Universe:
             if e.symbol in seen:
                 problems.append(f"duplicate symbol {e.symbol}")
             seen.add(e.symbol)
-            if not e.tracked_index:
+            # Cross-border and theme ETFs often have no index code we can
+            # source reliably; they set index_data: false and are exempt.
+            if e.index_data and not e.tracked_index:
                 problems.append(f"{e.symbol}: missing tracked_index")
         if not any(e.benchmark for e in self.etfs):
             problems.append("no benchmark ETF declared")

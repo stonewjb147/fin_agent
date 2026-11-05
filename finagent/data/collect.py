@@ -117,6 +117,15 @@ def collect(
         for sym in symbols:
             subset = etf[etf["symbol"] == sym]
             record("etf_daily_hfq", sym, subset)
+        for failure in etf.attrs.get("failures", []):
+            result.failures.append(
+                {
+                    "dataset": "etf_daily_hfq",
+                    "key": failure["symbol"],
+                    "kind": "error",
+                    "message": failure["message"],
+                }
+            )
     except ProviderError as exc:
         result.failures.append(
             {"dataset": "etf_daily_hfq", "key": "*", "kind": "error", "message": str(exc)[:500]}

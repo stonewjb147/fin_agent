@@ -26,6 +26,8 @@ dist/
 
 # Local data: regenerable from sources, never committed
 data/cache/
+data/cache_screen/
+data/factors/
 data/quality/
 data/snapshots/
 data/signals/

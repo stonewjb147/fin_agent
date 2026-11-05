@@ -249,14 +249,26 @@ class AkshareProvider:
         *,
         force: bool = False,
     ) -> pd.DataFrame:
-        frames = [self._etf_daily_one(s, start, end, force=force) for s in symbols]
-        frames = [f for f in frames if not f.empty]
+        frames = []
+        failures = []
+        # One delisted or renamed symbol must not discard the whole ETF leg;
+        # collect() reports the per-symbol failures from attrs.
+        for symbol in symbols:
+            try:
+                frame = self._etf_daily_one(symbol, start, end, force=force)
+            except Exception as exc:  # noqa: BLE001 - source errors are heterogeneous
+                failures.append({"symbol": symbol, "message": str(exc)[:300]})
+                continue
+            if not frame.empty:
+                frames.append(frame)
         if not frames:
             raise ProviderError("no ETF daily data returned")
         out = pd.concat(frames, ignore_index=True)
         out["date"] = pd.to_datetime(out["date"])
         out = out[(out["date"].dt.date >= start) & (out["date"].dt.date <= end)]
-        return out.sort_values(["date", "symbol"]).reset_index(drop=True)
+        out = out.sort_values(["date", "symbol"]).reset_index(drop=True)
+        out.attrs["failures"] = failures
+        return out
 
     def _etf_daily_one(self, symbol: str, start: date, end: date, *, force: bool) -> pd.DataFrame:
         start = max(start, self.history_start)
