@@ -20,6 +20,10 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
+# Study material (CFA curriculum PDFs) stays local: large binaries, not code,
+# and not redistributable.
+*.pdf
+
 # Local data: regenerable from sources, never committed
 data/cache/
 data/quality/
