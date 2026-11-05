@@ -174,7 +174,7 @@ docker compose run --rm app python scripts/probe_sources.py \
   --out data/quality/source_probe.json
 ```
 
-打开 JSON 检查：`etf_hist_hfq`、`etf_nav`、`index_hist`、`index_value_csindex`、`sector_flow_rank_today`、`macro_*`、`bond_10y` 是否至少各有一条可用路径。失败项会由 provider 的 fallback 覆盖；若某个数据集所有路径都失败，先不要装 cron，把 JSON 留着排查。
+云端实测 2026-11-05：**20/20 OK**（本机被失效代理挡住的 `push2*` 在云上可达）。打开 JSON 检查 `etf_hist_hfq`、`etf_nav`、`index_hist`、`index_value_csindex`、`sector_flow_rank_today`、`macro_*`、`bond_10y` 是否至少各有一条可用路径。失败项会由 provider 的 fallback 覆盖；若某个数据集所有路径都失败，先不要装 cron，把 JSON 留着排查。
 
 ---
 
@@ -206,8 +206,8 @@ docker compose run --rm app python -c \
 
 ```bash
 cd /opt/finagent
-crontab -u finagent deploy/crontab.example
-crontab -u finagent -l     # 确认三条任务
+crontab deploy/crontab.example       # 以当前部署用户安装
+crontab -l                            # 确认三条任务
 ```
 
 - 18:30 周一~五：`collect_daily.py`
@@ -246,7 +246,7 @@ mv /tmp/510300.manifest.json.bak data/cache/etf_daily_hfq/510300.manifest.json
 sudo reboot
 # 重新登录后
 systemctl status docker
-crontab -u finagent -l
+crontab -l
 cd /opt/finagent && ls data/cache | head && du -sh data
 ```
 

@@ -1,4 +1,4 @@
-# Install with: crontab -u finagent deploy/crontab.example
+# Install as the deploy user: crontab deploy/crontab.example
 # Host timezone must be Asia/Shanghai (see deploy/tencent-lighthouse.md).
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
