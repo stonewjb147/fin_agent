@@ -198,12 +198,14 @@ Numbers     : 51 checked, 0 untraceable
 
 ### 6.4 云端预期
 
-服务器 `.env` 目前没有 `DEEPSEEK_API_KEY`：
+服务器 `.env` 目前没有 `DEEPSEEK_API_KEY`。云端实测（2026-11-06，容器内）：
 
 ```bash
+docker compose run --rm app python -m finagent.cli report --date 2026-11-05 --no-llm
+# Mode: template / Gate PASS / Citations 51/51 / Numbers 51 checked, 0 untraceable
+
 docker compose run --rm app python -m finagent.cli report --date 2026-11-05
-# Mode: template
-# Fallback: DEEPSEEK_API_KEY not configured
+# Mode: template / Gate PASS / Fallback: DEEPSEEK_API_KEY not configured
 ```
 
 要启用 LLM，只需在服务器的 `.env` 增加 `DEEPSEEK_API_KEY`（以及可选的 `DEEPSEEK_BASE_URL`），不必重建镜像；key 不会进入镜像或日志。

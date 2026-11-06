@@ -218,10 +218,11 @@ docker compose run --rm app python -m finagent.cli signals --date 2026-11-05
 # 分数与 Phase 5 之前一致（叠加不可用不改分数）
 
 docker compose run --rm app python -m finagent.cli report --date 2026-11-05 --no-llm
-# 预期：Mode template / Gate PASS / 0 untraceable；产出 data/reports/report_2026-11-05.md|json
-# 这是确定性模板，不联网、不需要 key
+# 实测：Mode template / Gate PASS / Citations 51/51 / Numbers 51 checked, 0 untraceable
+# 产出 data/reports/report_2026-11-05.md|json；不联网、不需要 key
 docker compose run --rm app python -m finagent.cli report --date 2026-11-05
-# 有 DEEPSEEK_API_KEY：Mode llm；没有：仍写模板，JSON 里 fallback_reason 说明原因
+# 有 DEEPSEEK_API_KEY：Mode llm；没有：实测 Mode template + Fallback: DEEPSEEK_API_KEY not configured
+# JSON 里 fallback_reason 说明原因
 
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
