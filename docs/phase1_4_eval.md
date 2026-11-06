@@ -40,7 +40,7 @@ python scripts/phase_eval.py --start 2023-01-01 --bond 511260
 
 `pytest` 现在是 193 passed（评测与回归新增 19 条）。注意：`pyproject.toml` 里 `addopts = "-q"`，命令行再加 `-q` 会变成 `-qq` 把汇总行吞掉，所以文档里统一写 `pytest` 或 `pytest --collect-only -q` 计数。
 
-**云端复核**：同一条命令在 Lighthouse（`/opt/finagent`，同一份缓存）上跑出的 JSON 与本地逐字段一致——只有绝对路径、快照 id（`snap-20261105-ffe58d7a` 本地 / `snap-20261105-6ede3bf7` 云端）和 `generated_at` 不同，所有指标、成本敏感性、分年 IC、诊断值完全相同。云端 189 tests passed。
+**云端复核**：同一条命令在 Lighthouse（`/opt/finagent`，同一份缓存）上跑出的 JSON 与本地逐字段一致——只有绝对路径、快照 id（`snap-20261105-ffe58d7a` 本地 / `snap-20261105-6ede3bf7` 云端）和 `generated_at` 不同，所有指标、成本敏感性、类别中性 IC、有效广度、分年 IC、诊断值完全相同。云端 193 tests passed、22/22 硬检查 + 4/4 信息项通过。
 
 ## 2. 验收检查（真实缓存，不是合成数据）
 
