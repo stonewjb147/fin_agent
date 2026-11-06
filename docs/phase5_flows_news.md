@@ -2,6 +2,8 @@
 
 实现日期 2026-11-06；数据截止 `as_of=2026-11-05`。
 
+> 阅读指引：§0 结论、§2 实现、§5 学习笔记是主线；§3 验收与 §4 复现供复核；§6 是后续动作。
+
 ## 0. 结论先行
 
 | 项 | 状态 | 说明 |
@@ -137,7 +139,130 @@ python -m finagent.cli flows --date 2026-11-05 --json
 python -m finagent.cli signals --date 2026-11-05 --news data/news/2026-11-05.json --news-weight 0.2
 ```
 
-## 5. 下一步（按价值排序）
+## 5. 学习笔记（这一阶段值得记住的东西）
+
+这一节不是给「验收」看的，是以后回来看代码时先读的东西：为什么这样做、坑在哪、下次接新数据源时哪些决定可以照抄。
+
+### 5.1 这一阶段解决的不是「加因子」，而是「加不上时怎么办」
+
+Phase 5 的任务定义里有两个词决定了实现：**缺源降级**、**有界可解释**。免费源上的资金流数据本来就是残缺的（只有当日截面、份额有滞后、净值接口不稳定），所以真正的工程问题是：数据不全时，系统怎么保持诚实。只有三种选择：
+
+| 做法 | 后果 |
+|---|---|
+| 静默丢掉这个因子 | 报告看起来完整，实际少了一半信息，读的人不知道 |
+| 缺数据时回退到最近一天 | 报表好看，但 PIT 失守，回测会骗自己 |
+| 返回状态、在报告里写明原因、分数不动 | 本项目采用 |
+
+这就是 `SourceStatus` 的由来：`frozen dataclass(name, available, reason, n_records, first_date, last_date)`，每个 loader 返回 `(frame, status)`。**空 DataFrame 不能区分「没有信号」和「没有数据」**，所以调用方必须看 status，而不是看 `.empty`。
+
+### 5.2 快照 → 趋势：累积型数据源的成本
+
+`sector_flow_rank` 只有「今天」的行业资金流，没有历史接口。项目没有去买数据，也没有拿当日截面冒充 5 日累计，而是**让每天的采集多写一个 parquet**（`data/cache/sector_flow_rank/<date>.parquet`），再由 `load_sector_flow_history` 把 ≤ `as_of` 的文件拼起来。
+
+代价是时间：因子第一次可用要等 5 个交易日，IC 评估要等 60 个快照。
+
+学习点：
+
+- 数据的历史深度可以「从现在开始积累」，但**只能向前积累**。任何依赖历史的因子，上线日期 = 数据源接入日期 + 所需窗口。
+- 所以接入新源的第一天，最大的产出不是因子，是「开始记录」。
+- 这也是 `flows` 不进 cron 的原因：它只是读缓存，没有新信息；真正需要每天跑的是采集。
+
+### 5.3 状态有三层：没文件 / 文件不够 / 够用
+
+以 `sector_flow_rank` 为例：
+
+1. 目录里没有 ≤ `as_of` 的文件 → `no snapshot on or before ...`
+2. 有文件，但按日去重后不足 `window` 天 → `need 5 daily snapshots, have 1 (dates); collection accumulates one per trading day`
+3. ≥ `window` 天 → `OK` + `first_date..last_date`
+
+份额需要 ≥2 个快照，折溢价还多一个条件：同一天既有收盘又有净值。云端和本地同一天跑出的 MISSING 原因不同（缓存里的文件数不同），恰好证明这些句子是**算出来的**，不是写死的。这是「标注」和「敷衍」的分界线：原因必须来自数据本身。
+
+### 5.4 PIT 不是一个函数，是一串决定
+
+新闻的 PIT 具体化为四件事：
+
+- 文件名就是 `as_of`，但条目可能跨日 → **逐条**看 `published_at`，不信任文件名
+- 带时区的时间先转成本地时间再比日期；解析失败算 `dropped_invalid`，不猜
+- 晚于 `as_of` 的条目丢弃并**计数**（`dropped_future`），报告里能看到丢了几条
+- 没有 `published_at` 的条目当前按「可用」处理（很多源只有日期）。这是有意的宽松，但必须写进文档，否则以后会变成隐性前视
+
+学习点：PIT 的正确性靠「丢弃 + 计数」，不靠「相信来源」。
+
+### 5.5 映射比模型更容易出错
+
+新闻 → ETF 有三条通道，硬度依次递减：
+
+| 通道 | 写法 | 说明 |
+|---|---|---|
+| `symbols` | ETF 代码 | 最硬，新闻直接点名标的 |
+| `sectors` | 同花顺行业名 | 与 `universe.yaml` 的 `flow_sectors` 同一套词表 |
+| `themes` | `configs/news_map.yaml` | 人工词表，展开成 sectors / symbols / categories |
+
+两个容易忽略的细节：
+
+- 一条新闻匹配不到任何 ETF → 记为 unmatched，**不进入任何均值**（否则会把「无关」稀释成 0）
+- 一个 theme 映射到很宽的类别 → 所有标的同向加分，**类别中性化之后等于没加**
+
+学习点：NLP 的上限由词表决定。先把「板块名 ↔ ETF」对齐，再谈模型；映射表要保持短，它本质是人工先验，越长越像过拟合。
+
+### 5.6 有界叠加：为什么是 clip 而不是乘
+
+```text
+contribution = clip(weight × news_score, ±max_abs)     # 默认 0.20 / 0.30
+```
+
+四个决定各自对应一个失败模式：
+
+| 决定 | 如果反过来会怎样 |
+|---|---|
+| 用加法，不用乘法 | composite 是 z 分数的均值，量纲就是「标准差」；乘法会让 0 分附近的标的永远不动 |
+| 用 `clip` 限幅，不整体缩放 | 单条极端新闻（sentiment=1）最多改 0.30，不会把一个 SHORT 直接翻成 LONG |
+| 只调整最新一天 | 改历史分数就无法用因子复现，也无法归因 |
+| 每个变动输出 before / contribution / after / 前 3 条标题 | 可解释 = 能逐项对上账；测试断言的就是 `after − before == contribution` |
+
+学习点：任何「让分数变好看」的调整，都要能回答三个问题——改了多少、为什么改、能不能撤销。
+
+### 5.7 为什么资金流因子不进 composite
+
+不是因为没写完，而是顺序：**先测准，再决定投不投人**（Phase 2 的教训）。门槛写死在文档里：≥60 个快照 + 类别中性 IC 检验通过。在此之前把一天的行业流向塞进得分，等于用一个分布未知的变量去扰动一个已经测过（虽然是否定的）的分数。
+
+学习点：新因子的默认状态是「观察」，不是「启用」。
+
+### 5.8 代码地图
+
+| 文件 | 职责 | 关键函数 |
+|---|---|---|
+| `finagent/data/sources.py` | 统一状态对象 | `SourceStatus.missing / ok / to_dict` |
+| `finagent/flows/sector.py` | 行业资金流累积与截面 | `load_sector_flow_history`、`sector_flow_scores`、`flow_factor_scores`、`market_flow_context` |
+| `finagent/flows/etf.py` | 份额变化 / 折溢价 | `load_share_snapshots`、`share_change_scores`、`load_nav_history`、`premium_discount_scores` |
+| `finagent/flows/report.py` | 汇总与终端表格 | `build_flows_report`、`format_flows` |
+| `finagent/news/overlay.py` | PIT、映射、有界叠加 | `load_news`、`news_scores`、`apply_news_overlay` |
+| `configs/news_map.yaml` | 主题词表 | `themes: {sectors, symbols, categories}` |
+| `finagent/signals/pipeline.py` | 叠加接入信号 | `run_signal_pipeline(..., news_path=...)` |
+| `finagent/cli.py` | 入口 | `flows`、`signals --news` |
+| `tests/test_flows.py`、`tests/test_news_overlay.py` | 降级与可解释性 | 13 条测试 |
+
+建议阅读顺序：`data/sources.py` → `flows/sector.py` 的 `load_sector_flow_history`（看三层状态）→ `news/overlay.py` 的 `load_news`（看 PIT）→ `apply_news_overlay`（看有界叠加）→ `signals/pipeline.py` 的叠加段（看怎么接入而不破坏原有分数）。
+
+### 5.9 常见错误清单
+
+- 用空 DataFrame 表示「没有数据」，调用方无法区分「有数据但没信号」
+- 缺数据时回退到最近一天：报表完整，回测有前视
+- 用当日资金流截面当「近 5 日趋势」
+- 新闻只按文件日期过滤，不看 `published_at`
+- 叠加用乘法（量纲错），或只对总和做 clip（单条仍可爆）
+- 改历史分数：无法复现、无法归因
+- 把「份额增加」直接写成「资金流入」（还可能是拆分/分红）
+- 因为「有资金流数据」就把一天的流向写进 composite
+
+### 5.10 可以自己动手的练习
+
+1. 造 6 天假快照跑 `sector_flow_scores(window=5)`，看第一天为什么没有值（滚动求和的起点在哪里）
+2. 把 `news_map.yaml` 的「人工智能」改成映射 `categories: [thematic]`，观察类别中性化后它是否还有区分度
+3. 给 `apply_news_overlay` 加一个 `sector_neutral=True` 选项（叠加后再按类别减均值），测试 `after − before` 是否还等于 `contribution`，想清楚可解释性该怎么重新定义
+4. 把 `SourceStatus` 换成抛异常，重跑 `flows`，体会为什么「状态优先」比异常更容易写出完整报告
+
+## 6. 下一步（按价值排序）
 
 1. **让采集继续累积**：cron 的 18:30 采集已经在写 `sector_flow_rank`，不额外加任务。攒到 ≥5 个快照后 `flows` 自动给出 `sector_flow` 截面；攒到 ≥60 个再做 IC/ICIR 与类别中性检验，通过之前不进 composite。
 2. **接入 week3 新闻导出**：把 `week3` 的 `FinancialSignal` 输出转成上面的 JSON（`title / published_at / sectors / sentiment`），放到 `data/news/<date>.json`。新闻提取的模型准确率不在本仓库的验收范围，本仓库只保证 PIT、映射和有界。

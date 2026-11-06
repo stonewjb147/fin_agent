@@ -14,7 +14,7 @@
 | Phase 3 组合构建 + 结构化信号 + 预测账本 | 完成 |
 | Phase 4 真实回测（T+1 / 成本 / CPCV / DSR / PBO） | 完成 |
 | Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) |
-| Phase 5 资金流 + 新闻叠加（缺源降级、有界可解释） | 完成，数据受限，见 [`docs/phase5_flows_news.md`](docs/phase5_flows_news.md) |
+| Phase 5 资金流 + 新闻叠加（缺源降级、有界可解释） | 完成，数据受限，见 [`docs/phase5_flows_news.md`](docs/phase5_flows_news.md)（§5 学习笔记） |
 | Phase 6 LLM 报告与评测、Phase 7 风控合规、Phase 8~10 成长闭环 | 计划中 |
 
 ## 安装
