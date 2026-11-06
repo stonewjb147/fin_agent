@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）与 Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测），LLM 报告尚未做。**回测与评测是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU。
+目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）、Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测）与 Phase 5（资金流 / 份额 / 折溢价状态 + 有界新闻叠加），LLM 报告尚未做。**回测、评测与 `flows` 是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU；行业资金流历史由 18:30 采集顺带累积（每天一个快照）。服务器上暂不放 `data/news/`，新闻叠加自动跳过并在信号 JSON 的 `overlays.news` 里标注原因。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -154,13 +154,13 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest             # 193 passed
+docker compose run --rm app python -m pytest             # 206 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
 构建失败先看内存：`free -h`；4C8G 一般不会 OOM，若曾降配到 2C2G 再补 swap。
 
-> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`193 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
+> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`206 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
 
 ---
 
@@ -203,6 +203,10 @@ docker compose run --rm app python -m finagent.cli portfolio --date 2026-11-05
 
 docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
 # 预期：predictions=N，settled=0（首个结算要等满 20 个交易日）
+
+docker compose run --rm app python -m finagent.cli flows --date 2026-11-05
+# 实测：sector_flow_rank 只有 1 天快照 -> 明确 unavailable（从 2026-11-05 开始每天累积）
+# etf_scale_sse / etf_nav 无缓存 -> unavailable；market_flow 可用；news 文件缺失 -> unavailable
 
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv

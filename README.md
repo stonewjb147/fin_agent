@@ -14,6 +14,7 @@
 | Phase 3 组合构建 + 结构化信号 + 预测账本 | 完成 |
 | Phase 4 真实回测（T+1 / 成本 / CPCV / DSR / PBO） | 完成 |
 | Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) |
+| Phase 5 资金流 + 新闻叠加（缺源降级、有界可解释） | 完成，数据受限，见 [`docs/phase5_flows_news.md`](docs/phase5_flows_news.md) |
 | Phase 6 LLM 报告与评测、Phase 7 风控合规、Phase 8~10 成长闭环 | 计划中 |
 
 ## 安装
@@ -43,6 +44,11 @@ python -m finagent.cli factor-report --date 2026-11-05 --horizons 1,5,20
 
 # 结构化信号：写入 data/signals/<date>.json，并追加到预测账本
 python -m finagent.cli signals --date 2026-11-05 --horizon 20
+python -m finagent.cli signals --date 2026-11-05 --news data/news/2026-11-05.json   # 可选新闻叠加
+
+# Phase 5：资金流 / 份额 / 折溢价 / 新闻源的状态与截面（缺源会写明原因）
+python -m finagent.cli flows --date 2026-11-05
+python -m finagent.cli flows --date 2026-11-05 --json
 
 # 目标权重：类别预算 + 逆波动 + 有界因子倾斜
 python -m finagent.cli portfolio --date 2026-11-05
@@ -77,7 +83,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–4（采集、健康检查、因子报告、信号与预测账本、回测与评测），LLM 报告尚未做。cron 五条：18:30 采集、18:40 因子、18:45 信号、19:10 健康检查、周日 03:00 备份；**回测与 `phase_eval.py` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息）。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–5 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加），LLM 报告尚未做。cron 五条：18:30 采集、18:40 因子、18:45 信号、19:10 健康检查、周日 03:00 备份；**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
 
 ## 数据源现状（本机实测，2026-11-05）
 
@@ -101,6 +107,7 @@ docker compose run --rm app python scripts/health_check.py --alert feishu
 8. 组合口径：类别预算固定（宽基 35 / 行业 25 / 跨境 15 / 主题 10 / 债券 10 / 商品 5），类别内按逆波动分配，因子得分只做 `[0.5, 1.5]` 的有界倾斜；单标的 12% 上限，类别上限取 `data/universe.py` 的护栏值。不使用优化器，每个权重都能一句话解释。
 9. 日期口径：所有产物都以 `as_of` 命名，所以 `--date` 落在非交易日会**回退到前一个交易日**并在 stderr 说明；如果那天缓存里还没有数据（例如当天收盘后采集尚未跑），`factor-report` / `signals` / `portfolio` 直接报错退出（exit 1），**绝不**用昨天的数据生成一个标着今天的文件。
 10. 回测口径：引擎按**股数**记账而不是权重算术，所以成交不了的委托不会凭空生效。信号 T 日收盘生成、T+1 成交，默认用收盘价（与预测账本一致），`--exec-price open` 可切到次日开盘；单边成本 = 佣金 2bp + 滑点 5bp（ETF 免印花税），`--cost-bps` 可覆盖。停牌（价格缺失或成交量为 0）不成交；涨停不买、跌停不卖，未成交的权重留在原地等下次再平衡。先卖后买，现金不足以支付买入及其成本时按比例缩量。换手率记为单边（`成交额 / 2 / 前一日净值`），年化后再与成本对照。**读法**：PBO 是「组合内最优策略在样本外落到中位数以下」的频率，纯噪音下按本项目的 ω 口径约为 50%~70%，所以 86% 意味着四个变体之间没有真正的优劣；DSR 用显式 `n_trials`（默认只算本次跑的变体数，是乐观情形，真实试过的方案数应通过 `--trials` 传入）；CPCV 的 5% 分位夏普若显著为负，说明最差路径很痛，不能只看均值。**评价策略的主指标是「净成本增量」**：同一成本档下相对 `equal_weight` 的 CAGR 差（`net_increment_vs_equal_weight`），而不是单一成本下的绝对收益——只看 0 成本会把 `top_10` 的 +2.25pp 当成 alpha，扣 7bp 后它其实是 -1.52pp。
+11. 资金流与新闻口径：每个可选数据源返回 `SourceStatus`，缺数据时**降级并写明原因**，不静默丢因子、不回退到昨天。行业资金流需要 ≥5 个 `sector_flow_rank` 快照才定义 5 日累计；份额变化需要 ≥2 个 `etf_scale_sse` 快照；折溢价需要 `etf_nav` 与同日收盘。资金流因子在攒够 60 个快照并通过类别中性 IC 检验之前**不进合成得分**。新闻只从 `data/news/<as_of>.json` 读，`published_at` 晚于当日的条目丢弃；每个 ETF 的 `news_score` 是匹配条目 sentiment 的均值，调整量 `clip(weight × news_score, ±max_abs)`（默认 0.20 / 0.30），只改最新一天，并在 `overlays.news.contributions` 里逐条给出 `composite_before / contribution / composite_after / titles`。
 
 ## 目录
 
@@ -116,11 +123,13 @@ finagent/
   attribution/# Brinson / 因子归因（K4）
   backtest/   # 回测引擎、成本、CPCV/PBO（Phase 4）
   evaluation/ # 真实数据验收、基准、成本敏感性、类别中性分年 IC、有效广度、评测汇总
-  signals/    # 结构化 QuantSignal、新闻映射（Phase 3/5）
+  flows/      # 行业资金流、ETF 份额变化、折溢价（Phase 5，状态优先）
+  news/       # 新闻 → 板块 → ETF 映射与有界叠加（Phase 5）
+  signals/    # 结构化 QuantSignal、合成得分
   agent/      # LangGraph、报告、偏差自检（Phase 6）
   evals/      # golden set、引用/数字可追溯/格式指标
 configs/      # universe / catalog / 后续 factors、ips、holdings
-docs/         # 评测报告（phase1_4_eval.md）
+docs/         # 评测报告（phase1_4_eval.md、phase5_flows_news.md）
 tests/        # 全部离线，不联网
 scripts/      # 每日采集、健康检查、源探测、Phase 1-4 评测
 ```

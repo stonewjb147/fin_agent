@@ -23,6 +23,7 @@ from finagent.data.health import check_health
 from finagent.data.lineage import SnapshotStore
 from finagent.data.universe import load_universe
 from finagent.factors import load_close_panel
+from finagent.flows import build_flows_report, format_flows
 from finagent.portfolio.construct import format_portfolio
 from finagent.portfolio.pipeline import run_portfolio
 from finagent.predictions.ledger import PredictionLedger
@@ -181,6 +182,8 @@ def cmd_signals(args: argparse.Namespace) -> int:
             min_composite=args.min_composite,
             min_confidence=args.min_confidence,
             execution_lag=args.execution_lag,
+            news_path=args.news,
+            news_weight=args.news_weight,
         )
     except NoScoresError as exc:
         print(f"signals: {exc}", file=sys.stderr)
@@ -190,6 +193,23 @@ def cmd_signals(args: argparse.Namespace) -> int:
     if result.get("signal_file"):
         print(f"\nSignals : {result['signal_file']}")
     print(f"Ledger  : {config.PREDICTION_DIR}")
+    return 0
+
+
+def cmd_flows(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _resolve_as_of(provider, args.date)
+    report = build_flows_report(
+        universe,
+        as_of,
+        cache_dir=provider.cache.root,
+        news_path=args.news,
+        window=args.window,
+    )
+    print(format_flows(report))
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
     return 0
 
 
@@ -317,7 +337,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-composite", type=float, default=0.25)
     p.add_argument("--min-confidence", type=float, default=0.5)
     p.add_argument("--execution-lag", type=int, default=config.EXECUTION_LAG_DAYS)
+    p.add_argument(
+        "--news",
+        default=None,
+        help="news JSON for the overlay (default: data/news/<date>.json; missing file is skipped)",
+    )
+    p.add_argument("--news-weight", type=float, default=0.20, help="composite units per unit of news score")
     p.set_defaults(func=cmd_signals)
+
+    p = sub.add_parser("flows", help="Phase 5 flow / share / premium / news data status")
+    p.add_argument("--date", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--window", type=int, default=5, help="sector-flow snapshots to accumulate")
+    p.add_argument("--news", default=None, help="news JSON (default: data/news/<date>.json)")
+    p.add_argument("--json", action="store_true", help="also print the full JSON payload")
+    p.set_defaults(func=cmd_flows)
 
     p = sub.add_parser("portfolio", help="long-only target weights from the composite score")
     p.add_argument("--date", default=None, help="defaults to the latest trading day")

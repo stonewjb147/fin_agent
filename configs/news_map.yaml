@@ -1,0 +1,29 @@
+# Free-text theme -> where it lands. Hand-maintained, like the universe.
+#
+# `sectors` are THS industry names, the same vocabulary as `flow_sectors` in
+# universe.yaml. `symbols` are ETF codes. `categories` apply to every active
+# ETF in that category. Keep this short: a theme that maps to everything maps
+# to nothing after category neutralisation.
+version: n1
+themes:
+  降准:
+    sectors: [银行, 证券, 保险]
+  降息:
+    sectors: [银行, 证券, 保险]
+    symbols: ["511010", "511260"]
+  人工智能:
+    sectors: [软件开发, 计算机设备, 通信设备]
+  半导体:
+    sectors: [半导体]
+    symbols: ["512480"]
+  新能源:
+    sectors: [光伏设备, 电池, 能源金属]
+  军工:
+    sectors: [军工装备, 军工电子]
+    symbols: ["512660"]
+  医药:
+    sectors: [化学制药, 生物制品, 医疗器械, 医疗服务, 中药, 医药商业]
+  黄金:
+    categories: [commodity]
+  房地产:
+    sectors: [房地产]
