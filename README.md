@@ -89,7 +89,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–6 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告）。cron 五条：18:30 采集、18:40 因子、18:45 信号、19:10 健康检查、周日 03:00 备份；报告命令在 `crontab.example` 里以注释形式给出，按需开启（没有 `DEEPSEEK_API_KEY` 时写确定性模板）。**回测、`phase_eval.py`、`flows` 与 `report` 是按需研究命令，不进默认 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–6 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告）。cron 六条：18:30 采集、18:40 因子、18:45 信号、18:50 报告、19:10 健康检查、周日 03:00 备份；报告有 `DEEPSEEK_API_KEY` 时走 LLM，没有或调用失败时写确定性模板并把原因记进 JSON。**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
 
 ## 数据源现状（本机实测，2026-11-05）
 

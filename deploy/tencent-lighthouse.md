@@ -221,8 +221,9 @@ docker compose run --rm app python -m finagent.cli report --date 2026-11-05 --no
 # 实测：Mode template / Gate PASS / Citations 51/51 / Numbers 51 checked, 0 untraceable
 # 产出 data/reports/report_2026-11-05.md|json；不联网、不需要 key
 docker compose run --rm app python -m finagent.cli report --date 2026-11-05
-# 有 DEEPSEEK_API_KEY：Mode llm；没有：实测 Mode template + Fallback: DEEPSEEK_API_KEY not configured
-# JSON 里 fallback_reason 说明原因
+# 实测（云端已配置 key）：Mode llm (deepseek-chat, 1 attempt) / Gate PASS / Citations 75/75 / Numbers 77 checked, 0 untraceable
+# 没有 key：Mode template + Fallback: DEEPSEEK_API_KEY not configured；JSON 里 fallback_reason 说明原因
+# key 只在请求头，不进镜像/日志/报告；复制到过期 key 会 HTTP 401 并回退模板
 
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
@@ -247,7 +248,7 @@ docker compose run --rm app python -c \
 ```bash
 cd /opt/finagent
 crontab deploy/crontab.example       # 以当前部署用户安装
-crontab -l                            # 确认五条任务（报告任务默认注释，见下）
+crontab -l                            # 确认六条任务（含 18:50 报告）
 ```
 
 - 18:30 周一~五：`collect_daily.py`
@@ -255,7 +256,7 @@ crontab -l                            # 确认五条任务（报告任务默认�
 - 18:45 周一~五：`signals`（先结算到期预测，再写当日信号并入账）
 - 19:10 周一~五：`health_check.py --alert feishu`
 - 周日 03:00：备份 snapshots/quality/factors/signals/predictions/portfolio/reports/configs，保留 8 周
-- 可选 18:50 周一~五：`report`（`crontab.example` 里默认注释；有 key 走 LLM，没有 key 写模板）
+- 18:50 周一~五：`report`（有 `DEEPSEEK_API_KEY` 走 LLM，没有或调用失败写确定性模板，`fallback_reason` 记录原因）
 
 **先手动演练一次**（不用等到明天）：
 

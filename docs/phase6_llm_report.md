@@ -196,19 +196,23 @@ Numbers     : 51 checked, 0 untraceable
 
 另外发现通用 95% 数字门禁会放过 1 个假数字和多余精度，于是新增 `strict_untraceable`，报告层要求 100%。
 
-### 6.4 云端预期
+### 6.4 云端实测
 
-服务器 `.env` 目前没有 `DEEPSEEK_API_KEY`。云端实测（2026-11-06，容器内）：
+2026-11-06 在服务器容器内实测。先测无 key 的降级路径，再在 `.env` 配置 `DEEPSEEK_API_KEY` 后测真实调用：
 
 ```bash
-docker compose run --rm app python -m finagent.cli report --date 2026-11-05 --no-llm
-# Mode: template / Gate PASS / Citations 51/51 / Numbers 51 checked, 0 untraceable
-
+# 无 key（或 --no-llm）
 docker compose run --rm app python -m finagent.cli report --date 2026-11-05
-# Mode: template / Gate PASS / Fallback: DEEPSEEK_API_KEY not configured
+# Mode: template / Gate PASS / Citations 51/51 / Numbers 51 checked, 0 untraceable
+# Fallback: DEEPSEEK_API_KEY not configured
+
+# 配置 key 后
+docker compose run --rm app python -m finagent.cli report --date 2026-11-05
+# Mode: llm (model deepseek-chat, 1 attempt(s)) / Gate PASS
+# Citations 75/75 valid / Numbers 77 checked, 0 untraceable
 ```
 
-要启用 LLM，只需在服务器的 `.env` 增加 `DEEPSEEK_API_KEY`（以及可选的 `DEEPSEEK_BASE_URL`），不必重建镜像；key 不会进入镜像或日志。
+两次输出与本机同口径：同一份证据表、同一套门禁，云端只多了网络调用。配置 key 只需编辑服务器 `.env` 并 `chmod 600`，不必重建镜像；key 只出现在请求头，不进入镜像、日志或报告 JSON。若复制了 `.env` 里过期的那条 key，会得到 `HTTP 401` 并回退模板——本轮就遇到过一次，用指纹（长度 + SHA-256 前缀）比对定位，没有打印 key 本身。
 
 ---
 

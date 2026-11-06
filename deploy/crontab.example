@@ -15,11 +15,11 @@ TZ=Asia/Shanghai
 # then writes data/signals/<date>.json and appends to data/predictions/.
 45 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli signals >> logs/cron.log 2>&1
 
-# Optional Phase 6 narrative report. It reads the signals/portfolio/factor
-# artefacts above and writes data/reports/report_<date>.md|json. With
-# DEEPSEEK_API_KEY it calls the LLM; without it the deterministic template is
-# written and the JSON records why it fell back.
-# 50 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli report >> logs/cron.log 2>&1
+# Phase 6 narrative report. It reads the signals/portfolio/factor artefacts
+# above and writes data/reports/report_<date>.md|json. With DEEPSEEK_API_KEY
+# it calls the LLM; without it the deterministic template is written and the
+# JSON records why it fell back.
+50 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli report >> logs/cron.log 2>&1
 
 # Freshness / null-ratio check, with a Feishu alert when it fails.
 10 19 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python scripts/health_check.py --alert feishu >> logs/cron.log 2>&1
