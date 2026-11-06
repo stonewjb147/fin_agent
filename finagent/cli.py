@@ -20,7 +20,13 @@ from finagent.data.collect import collect
 from finagent.data.health import check_health
 from finagent.data.lineage import SnapshotStore
 from finagent.data.universe import load_universe
+from finagent.factors import load_close_panel
+from finagent.portfolio.construct import format_portfolio
+from finagent.portfolio.pipeline import run_portfolio
+from finagent.predictions.ledger import PredictionLedger
+from finagent.predictions.ledger import format_summary as format_ledger
 from finagent.research.report import format_summary, run_factor_report
+from finagent.signals.pipeline import format_signals, run_signal_pipeline
 
 
 def _parse_date(value: str) -> date:
@@ -137,6 +143,57 @@ def cmd_factor_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_signals(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    result = run_signal_pipeline(
+        universe,
+        as_of=as_of,
+        horizon=args.horizon,
+        n_long=args.n_long,
+        n_short=args.n_short,
+        min_composite=args.min_composite,
+        min_confidence=args.min_confidence,
+        execution_lag=args.execution_lag,
+    )
+    print(format_signals(result))
+    if result.get("signal_file"):
+        print(f"\nSignals : {result['signal_file']}")
+    print(f"Ledger  : {config.PREDICTION_DIR}")
+    return 0
+
+
+def cmd_portfolio(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    result = run_portfolio(universe, as_of=as_of)
+    print(format_portfolio(result))
+    print(f"\nPortfolio : {result.get('portfolio_file')}")
+    return 0
+
+
+def cmd_ledger(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    ledger = PredictionLedger()
+
+    if args.settle:
+        close = load_close_panel(config.CACHE_DIR, universe.symbols(as_of), as_of)
+        settled = ledger.settle(close, as_of, symbols=universe.symbols(as_of))
+        print(f"settled {len(settled)} prediction(s) as of {as_of}")
+
+    summary = ledger.summary(as_of)
+    print(format_ledger(summary))
+    out = config.QUALITY_DIR / f"ledger_summary_{as_of.isoformat()}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nSummary : {out}")
+    return 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -180,9 +237,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=cmd_factor_report)
 
+    p = sub.add_parser("signals", help="structured signals + prediction ledger")
+    p.add_argument("--date", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--horizon", type=int, default=20, help="holding period in trading days")
+    p.add_argument("--n-long", type=int, default=10)
+    p.add_argument("--n-short", type=int, default=5)
+    p.add_argument("--min-composite", type=float, default=0.25)
+    p.add_argument("--min-confidence", type=float, default=0.5)
+    p.add_argument("--execution-lag", type=int, default=config.EXECUTION_LAG_DAYS)
+    p.set_defaults(func=cmd_signals)
+
+    p = sub.add_parser("portfolio", help="long-only target weights from the composite score")
+    p.add_argument("--date", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.set_defaults(func=cmd_portfolio)
+
+    p = sub.add_parser("ledger", help="inspect or settle the prediction ledger")
+    p.add_argument("--date", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--settle", action="store_true", help="settle matured predictions first")
+    p.set_defaults(func=cmd_ledger)
+
     for name, phase, help_text in (
         ("valuation", "Phase K1", "index valuation dashboard"),
-        ("portfolio", "Phase K3", "IPS -> SAA -> TAA -> weights"),
         ("attribution", "Phase K4", "Brinson / factor attribution"),
         ("backtest", "Phase 4", "walk-forward backtest with overfitting diagnostics"),
         ("daily", "Phase 6", "end-to-end daily research report"),

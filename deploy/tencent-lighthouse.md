@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、产出因子报告、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）与 Phase 2（因子面板 + IC 报告），不含组合、回测与 LLM。
+目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）与 Phase 3（结构化信号 + 预测账本 + 目标权重），不含回测与 LLM。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -157,7 +157,7 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest -q          # 90 passed
+docker compose run --rm app python -m pytest -q          # 123 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
@@ -195,6 +195,15 @@ docker compose run --rm app python -m finagent.cli snapshot --id <上一步的 s
 
 docker compose run --rm app python -m finagent.cli factor-report --date 2026-11-05
 # 实测：3 个因子 × 3 个持有期的 IC/ICIR/t/q 表格，17 秒跑完（无网络）
+
+docker compose run --rm app python -m finagent.cli signals --date 2026-11-05
+# 预期：LONG/SHORT 各若干条（每类最多 3 条），末尾提示 validated=false
+
+docker compose run --rm app python -m finagent.cli portfolio --date 2026-11-05
+# 预期：类别暴露等于政策预算（35/25/15/10/10/5），单标的 <= 12%
+
+docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
+# 预期：predictions=N，settled=0（首个结算要等满 20 个交易日）
 ```
 
 验证飞书（这一步会真的发一条消息）：
@@ -211,13 +220,14 @@ docker compose run --rm app python -c \
 ```bash
 cd /opt/finagent
 crontab deploy/crontab.example       # 以当前部署用户安装
-crontab -l                            # 确认四条任务
+crontab -l                            # 确认五条任务
 ```
 
 - 18:30 周一~五：`collect_daily.py`
 - 18:40 周一~五：`factor-report`（只读缓存，不联网）
+- 18:45 周一~五：`signals`（先结算到期预测，再写当日信号并入账）
 - 19:10 周一~五：`health_check.py --alert feishu`
-- 周日 03:00：备份 snapshots/quality/factors/configs，保留 8 周
+- 周日 03:00：备份 snapshots/quality/factors/signals/predictions/portfolio/configs，保留 8 周
 
 **先手动演练一次**（不用等到明天）：
 
@@ -225,6 +235,7 @@ crontab -l                            # 确认四条任务
 cd /opt/finagent
 docker compose run --rm app python scripts/collect_daily.py >> logs/cron.log 2>&1; echo "exit=$?"
 docker compose run --rm app python -m finagent.cli factor-report >> logs/cron.log 2>&1; echo "exit=$?"
+docker compose run --rm app python -m finagent.cli signals >> logs/cron.log 2>&1; echo "exit=$?"
 docker compose run --rm app python scripts/health_check.py --alert feishu; echo "exit=$?"
 tail -50 logs/cron.log
 ```
@@ -321,9 +332,9 @@ docker tag finagent:0.1.0 finagent:$(git rev-parse --short HEAD)
 
 ## 13. 备份与恢复
 
-备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality data/factors configs` 到 `backups/`，保留 56 天。
+备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality data/factors data/signals data/predictions data/portfolio configs` 到 `backups/`，保留 56 天。
 
-- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康/因子报告）、`data/factors`（因子面板）、`configs`、`.env`（单独保管）。
+- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康/因子报告）、`data/factors`（因子面板）、`data/predictions`（预测账本，**不可重建**，丢了就再也没有当时的口径）、`data/signals`、`data/portfolio`、`configs`、`.env`（单独保管）。
 - **不必备份**：`data/cache` 可由源重建；`faiss_index` 不在本次部署。
 - 需要异地容灾时，把 `backups/` 同步到腾讯云 COS（`coscmd upload -r backups/ /finagent-backups/`）。
 

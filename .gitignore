@@ -31,6 +31,7 @@ data/factors/
 data/quality/
 data/snapshots/
 data/signals/
+data/predictions/
 data/reports/
 data/portfolio/
 logs/

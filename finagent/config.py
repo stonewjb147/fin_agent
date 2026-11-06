@@ -20,6 +20,7 @@ SNAPSHOT_DIR = DATA_DIR / "snapshots"
 QUALITY_DIR = DATA_DIR / "quality"
 FACTOR_DIR = DATA_DIR / "factors"
 SIGNAL_DIR = DATA_DIR / "signals"
+PREDICTION_DIR = DATA_DIR / "predictions"
 REPORT_DIR = DATA_DIR / "reports"
 PORTFOLIO_DIR = DATA_DIR / "portfolio"
 CONFIG_DIR = PROJECT_ROOT / "configs"
@@ -66,6 +67,7 @@ def ensure_dirs() -> None:
         QUALITY_DIR,
         FACTOR_DIR,
         SIGNAL_DIR,
+        PREDICTION_DIR,
         REPORT_DIR,
         PORTFOLIO_DIR,
     ):
