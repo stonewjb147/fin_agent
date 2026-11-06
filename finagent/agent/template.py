@@ -54,6 +54,7 @@ def render_template(bundle: EvidenceBundle, facts: ReportFacts) -> str:
     factor = facts.factor or {}
     health = facts.health or {}
     phase = facts.phase_eval or {}
+    risk = facts.risk or {}
     value = phase.get("value") or {}
     news = (signals.get("overlays") or {}).get("news") or {}
 
@@ -89,6 +90,12 @@ def render_template(bundle: EvidenceBundle, facts: ReportFacts) -> str:
             f"- 因子检验共 {n_tests} 项 [snap:factor:{as_of}:n_tests]，"
             f"BH-FDR（q={fdr}%）校正后显著 {n_sig} 项 "
             f"[snap:factor:{as_of}:n_significant] [snap:factor:{as_of}:fdr_q_pct]。"
+        )
+    if risk and risk.get("status") == "blocked":
+        hard_failed = _show(bundle, f"risk:{as_of}:n_hard_failed", "{:.0f}")
+        lines.append(
+            f"- 风控硬约束失败 {hard_failed} 项 [snap:risk:{as_of}:n_hard_failed]，"
+            "本报告触发风控阻断，不给出组合层面的正常结论。"
         )
     lines.append(
         f"- 以上信号全部标记 validated=false，只能作为研究观察；"
@@ -176,6 +183,16 @@ def render_template(bundle: EvidenceBundle, facts: ReportFacts) -> str:
         lines.append("- 本次没有找到当日的数据健康检查文件，数据新鲜度未在报告中确认。")
     if bundle.missing:
         lines.append(f"- 缺失的工件：{'、'.join(bundle.missing)}；相关结论已从略。")
+    if risk and f"risk:{as_of}:n_checks" in bundle.ids:
+        n_checks = _show(bundle, f"risk:{as_of}:n_checks", "{:.0f}")
+        hard_failed = _show(bundle, f"risk:{as_of}:n_hard_failed", "{:.0f}")
+        soft_failed = _show(bundle, f"risk:{as_of}:n_soft_failed", "{:.0f}")
+        lines.append(
+            f"- 风控检查 {n_checks} 项 [snap:risk:{as_of}:n_checks]："
+            f"硬约束失败 {hard_failed} 项 [snap:risk:{as_of}:n_hard_failed]，"
+            f"软约束失败 {soft_failed} 项 [snap:risk:{as_of}:n_soft_failed]；"
+            f"状态 {risk.get('status')}。"
+        )
     lines.append(
         "- 存续偏差：股票池按当前存续标的构建，已退市或当时尚未上市的标的没有被完整纳入。"
     )

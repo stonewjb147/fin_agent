@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from finagent.agent.evidence import EvidenceBundle, ReportFacts, format_evidence
+from finagent.risk.compliance import FORBIDDEN_TERMS, REQUIRED_TERMS
 
 REQUIRED_SECTIONS = ["## 结论", "## 信号", "## 组合", "## 数据与限制", "## 证伪条件"]
-MUST_INCLUDE = ["validated=false", "存续偏差", "不构成投资建议"]
-FORBIDDEN = ["稳赚", "必涨", "保证收益", "推荐买入", "建议买入", "满仓", "抄底"]
+MUST_INCLUDE = list(REQUIRED_TERMS)
+FORBIDDEN = list(FORBIDDEN_TERMS)
 MIN_CITATIONS = 10
 
 SYSTEM_PROMPT = """你是 finagent 的研究报告撰写器。你的唯一职责是把给定的证据表组织成中文研究报告。
@@ -20,7 +21,7 @@ SYSTEM_PROMPT = """你是 finagent 的研究报告撰写器。你的唯一职责
    ## 组合
    ## 数据与限制
    ## 证伪条件
-4. 必须原样出现这三个词组：validated=false、存续偏差、不构成投资建议。
+4. 必须原样出现这三个词组：validated=false、存续偏差、不构成投资建议；若补充事实里风控状态为 blocked，还必须原样出现「风控阻断」。
 5. 绝对禁止出现：稳赚、必涨、保证收益、推荐买入、建议买入、满仓、抄底。
 6. 回测与因子检验只能描述为研究结果，不得说成已验证、可靠或可实盘；不要给出买卖建议。
 7. 不要写证据表之外的数字；日期可以正常写，ETF 六位代码可以写。不要写 signal_id。
@@ -34,6 +35,13 @@ def user_prompt(bundle: EvidenceBundle, facts: ReportFacts) -> str:
         news_line = "新闻叠加可用"
     else:
         news_line = f"新闻叠加不可用（{news.get('reason', '未提供原因')}）"
+    risk = facts.risk or {}
+    if risk:
+        risk_line = f"风控状态：{risk.get('status')}"
+        if risk.get("status") == "blocked":
+            risk_line += "；结论必须明确写「风控阻断」，不得给出组合正常的结论"
+    else:
+        risk_line = "风控状态：未运行"
     return f"""请为 {bundle.as_of} 撰写一份 600~900 字的研究报告（正文不超过 900 个汉字，
 不要逐条罗列全部证据；五个标题和必须词组必须完整保留）。
 
@@ -44,6 +52,7 @@ def user_prompt(bundle: EvidenceBundle, facts: ReportFacts) -> str:
 - 信号文件：{facts.sources.get('signals', '')}
 - 缺失的工件：{missing}
 - {news_line}
+- {risk_line}
 - 本报告是研究记录，不是投资建议。
 
 请按五个标题组织内容；每个数字后附 [snap:<ID>]。"""

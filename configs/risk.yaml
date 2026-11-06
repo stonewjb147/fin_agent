@@ -1,0 +1,39 @@
+# Phase 7 risk limits. Edit deliberately: every report records the policy
+# fingerprint, so a changed limit is visible in the audit trail.
+#
+# hard = breach blocks the report's normal conclusion
+# soft = breach is a warning
+comment: >
+  Defaults for a long-only A-share ETF book. Drawdown is compared with the
+  policy strategy's backtest, not with a live track record.
+
+name: risk-v1
+
+# Position and concentration.
+max_asset_weight: 0.12
+max_top5_weight: 0.40
+min_n_eff: 3.0
+max_avg_corr: 0.60
+
+# Portfolio risk budget.
+max_portfolio_vol: 0.18
+max_drawdown: 0.20
+
+# Liquidity and data quality.
+min_avg_amount_60d: 50000000
+max_health_errors: 0
+max_health_warnings: 0
+max_category_budget_drift: 0.03
+
+# Conditions for a human review of validated=false (see validation.py).
+min_settled_samples: 385
+min_hit_rate_excess: 0.55
+min_factor_significant: 1
+
+category_caps:
+  broad: 1.0
+  sector: 0.40
+  thematic: 0.30
+  bond: 0.60
+  cross_border: 0.30
+  commodity: 0.20

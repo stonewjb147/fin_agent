@@ -25,7 +25,6 @@ from finagent.agent.llm import DeepSeekClient, LLMClient, LLMError, config_from_
 from finagent.agent.prompts import (
     FORBIDDEN,
     MIN_CITATIONS,
-    MUST_INCLUDE,
     REQUIRED_SECTIONS,
     SYSTEM_PROMPT,
     repair_prompt,
@@ -33,6 +32,7 @@ from finagent.agent.prompts import (
 )
 from finagent.agent.template import render_template
 from finagent.evals.metrics import score_case, strict_untraceable
+from finagent.risk.compliance import required_terms
 
 
 class ReportError(RuntimeError):
@@ -44,10 +44,10 @@ def verify_report(text: str, bundle: EvidenceBundle) -> dict:
     case = {
         "id": f"report:{bundle.as_of}",
         "required_sections": REQUIRED_SECTIONS,
-        "must_include": MUST_INCLUDE,
         "forbidden": FORBIDDEN,
         "required_citations": True,
         "min_citations": MIN_CITATIONS,
+        "must_include": required_terms(bundle.risk_status),
         "allowed_values": bundle.allowed_values,
         "ignore_values": bundle.ignore_values,
         "ignore_terms": list(bundle.ignore_terms),
@@ -88,6 +88,7 @@ class ReportResult:
     fallback_reason: str | None = None
     prompt_sha256: str | None = None
     evidence: EvidenceBundle | None = None
+    risk: dict | None = None
     files: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -100,6 +101,7 @@ class ReportResult:
             "prompt_sha256": self.prompt_sha256,
             "checks": self.checks,
             "evidence": self.evidence.as_dict() if self.evidence else None,
+            "risk": self.risk,
             "files": self.files,
             "text": self.text,
         }
@@ -191,6 +193,7 @@ def generate_report(
         fallback_reason=fallback_reason,
         prompt_sha256=digest,
         evidence=bundle,
+        risk=facts.risk,
     )
 
     if write:

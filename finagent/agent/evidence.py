@@ -46,6 +46,7 @@ class EvidenceBundle:
     missing: list[str] = field(default_factory=list)
     symbols: tuple[str, ...] = ()
     ignore_terms: tuple[str, ...] = ()
+    risk_status: str = ""
 
     def by_id(self, evidence_id: str) -> Evidence:
         for item in self.items:
@@ -74,6 +75,7 @@ class EvidenceBundle:
             "missing": self.missing,
             "symbols": list(self.symbols),
             "ignore_terms": list(self.ignore_terms),
+            "risk_status": self.risk_status,
         }
 
 
@@ -91,6 +93,7 @@ class ReportFacts:
     factor: dict | None = None
     health: dict | None = None
     phase_eval: dict | None = None
+    risk: dict | None = None
     sources: dict[str, str] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
 
@@ -128,6 +131,7 @@ def build_facts(as_of: str, data_dir: Path | None = None) -> ReportFacts:
     facts.phase_eval = _load_optional(
         data_dir, "phase_eval", f"quality/phase_eval_{as_of}.json", facts
     )
+    facts.risk = _load_optional(data_dir, "risk", f"quality/risk_{as_of}.json", facts)
     return facts
 
 
@@ -248,6 +252,13 @@ def build_evidence(facts: ReportFacts) -> EvidenceBundle:
         add(f"health:{as_of}:errors", "数据健康检查错误数", health.get("errors"), "项")
         add(f"health:{as_of}:warnings", "数据健康检查警告数", health.get("warnings"), "项")
 
+    # --- Phase 7 risk ----------------------------------------------------
+    risk = facts.risk or {}
+    risk_counts = risk.get("counts") or {}
+    add(f"risk:{as_of}:n_checks", "风控检查项数", risk_counts.get("total"), "项")
+    add(f"risk:{as_of}:n_hard_failed", "风控硬约束失败项数", risk_counts.get("hard_failed"), "项")
+    add(f"risk:{as_of}:n_soft_failed", "风控软约束失败项数", risk_counts.get("soft_failed"), "项")
+
     # --- optional Phase 1-5 evaluation ----------------------------------
     phase = facts.phase_eval or {}
     value = phase.get("value") or {}
@@ -286,6 +297,7 @@ def build_evidence(facts: ReportFacts) -> EvidenceBundle:
         missing=list(facts.missing),
         symbols=tuple(symbols),
         ignore_terms=tuple(ignore_terms),
+        risk_status=str(risk.get("status") or ""),
     )
 
 

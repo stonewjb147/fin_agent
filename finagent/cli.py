@@ -31,6 +31,7 @@ from finagent.portfolio.pipeline import run_portfolio
 from finagent.predictions.ledger import PredictionLedger
 from finagent.predictions.ledger import format_summary as format_ledger
 from finagent.research.report import NoDataError, format_summary, run_factor_report
+from finagent.risk import RiskError, format_risk, run_risk
 from finagent.signals.pipeline import format_signals, run_signal_pipeline
 from finagent.signals.score import NoScoresError
 
@@ -321,6 +322,19 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_risk(args: argparse.Namespace) -> int:
+    try:
+        as_of = args.date or _latest_signal_date()
+        result = run_risk(as_of, out_dir=Path(args.out) if args.out else None)
+    except (EvidenceError, RiskError) as exc:
+        print(f"risk: {exc}", file=sys.stderr)
+        return 1
+    print(format_risk(result))
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    return 1 if result["status"] == "blocked" else 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -439,6 +453,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=None, help="output directory (default: data/reports)")
     p.add_argument("--json", action="store_true", help="also print the full JSON payload")
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("risk", help="portfolio risk limits and validated=false criteria")
+    p.add_argument("--date", default=None, help="defaults to the latest signal file")
+    p.add_argument("--out", default=None, help="output directory (default: data/quality)")
+    p.add_argument("--json", action="store_true", help="also print the full JSON payload")
+    p.set_defaults(func=cmd_risk)
 
     for name, phase, help_text in (
         ("valuation", "Phase K1", "index valuation dashboard"),

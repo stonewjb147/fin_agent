@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）、Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测）、Phase 5（资金流 / 份额 / 折溢价状态 + 有界新闻叠加）与 Phase 6（证据约束的 LLM 报告 + 确定性回退）。**回测、评测与 `flows` 是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU；行业资金流历史由 18:30 采集顺带累积（每天一个快照）。服务器上暂不放 `data/news/`，新闻叠加自动跳过并在信号 JSON 的 `overlays.news` 里标注原因。
+目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）、Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测）、Phase 5（资金流 / 份额 / 折溢价状态 + 有界新闻叠加）、Phase 6（证据约束的 LLM 报告 + 确定性回退）与 Phase 7（风控硬/软约束 + `validated=false` 升级门槛）。**回测、评测与 `flows` 是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU；行业资金流历史由 18:30 采集顺带累积（每天一个快照）。服务器上暂不放 `data/news/`，新闻叠加自动跳过并在信号 JSON 的 `overlays.news` 里标注原因。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -158,13 +158,13 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest             # 225 passed
+docker compose run --rm app python -m pytest             # 238 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
 构建失败先看内存：`free -h`；4C8G 一般不会 OOM，若曾降配到 2C2G 再补 swap。
 
-> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`225 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
+> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`238 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
 
 ---
 
@@ -204,6 +204,10 @@ docker compose run --rm app python -m finagent.cli signals --date 2026-11-05
 
 docker compose run --rm app python -m finagent.cli portfolio --date 2026-11-05
 # 预期：类别暴露等于政策预算（35/25/15/10/10/5），单标的 <= 12%
+
+docker compose run --rm app python -m finagent.cli risk --date 2026-11-05
+# 实测：status=warn / hard 15/15 / soft 10/11 / n_eff 2.64 < 3.0
+# 产出 data/quality/risk_<date>.json；退出码 0=pass/warn，1=blocked
 
 docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
 # 预期：predictions=N，settled=0（首个结算要等满 20 个交易日）
@@ -248,12 +252,14 @@ docker compose run --rm app python -c \
 ```bash
 cd /opt/finagent
 crontab deploy/crontab.example       # 以当前部署用户安装
-crontab -l                            # 确认六条任务（含 18:50 报告）
+crontab -l                            # 确认八条任务（含 18:47 组合、18:48 风控、18:50 报告）
 ```
 
 - 18:30 周一~五：`collect_daily.py`
 - 18:40 周一~五：`factor-report`（只读缓存，不联网）
 - 18:45 周一~五：`signals`（先结算到期预测，再写当日信号并入账）
+- 18:47 周一~五：`portfolio`（目标权重，只读缓存）
+- 18:48 周一~五：`risk`（硬/软约束，写 `data/quality/risk_<date>.json`）
 - 19:10 周一~五：`health_check.py --alert feishu`
 - 周日 03:00：备份 snapshots/quality/factors/signals/predictions/portfolio/reports/configs，保留 8 周
 - 18:50 周一~五：`report`（有 `DEEPSEEK_API_KEY` 走 LLM，没有或调用失败写确定性模板，`fallback_reason` 记录原因）
