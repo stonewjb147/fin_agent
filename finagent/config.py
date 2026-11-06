@@ -39,6 +39,12 @@ COMMISSION_RATE = 0.0002  # ETF commission, 2bp
 SLIPPAGE_RATE = 0.0005  # 5bp
 STAMP_DUTY_RATE = 0.0  # ETFs are exempt
 
+# Backtest fill rules. A day whose close moved at least this much is treated as
+# locked at the limit, so the side that would chase it does not fill.
+LIMIT_MOVE_THRESHOLD = 0.098
+BACKTEST_REBALANCE_DAYS = 5
+BACKTEST_MIN_TRADE_WEIGHT = 0.0
+
 # Signals are generated after close on day T and executed on T+1.
 EXECUTION_LAG_DAYS = 1
 

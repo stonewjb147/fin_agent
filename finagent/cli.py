@@ -15,6 +15,8 @@ from datetime import date
 from pathlib import Path
 
 from finagent import config
+from finagent.backtest.costs import DEFAULT_COST, cost_from_bps
+from finagent.backtest.report import format_backtest, run_backtest_suite
 from finagent.data.akshare_provider import default_provider
 from finagent.data.collect import collect
 from finagent.data.health import check_health
@@ -225,6 +227,44 @@ def cmd_ledger(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    universe = _universe(args.universe)
+    provider = default_provider()
+    end = _resolve_as_of(provider, args.end)
+    start = _parse_date(args.start)
+    if start >= end:
+        print(f"backtest: --start {start} must be before --end {end}", file=sys.stderr)
+        return 1
+
+    cost = DEFAULT_COST
+    if args.cost_bps is not None:
+        if args.cost_bps < 0:
+            print("backtest: --cost-bps cannot be negative", file=sys.stderr)
+            return 1
+        cost = cost_from_bps(args.cost_bps)
+
+    try:
+        payload = run_backtest_suite(
+            universe,
+            start=start,
+            end=end,
+            cost=cost,
+            rebalance_days=args.rebalance_days,
+            execution_price=args.exec_price,
+            execution_lag=args.execution_lag,
+            top_n=args.top_n,
+            trials=args.trials,
+        )
+    except ValueError as exc:
+        print(f"backtest: {exc}", file=sys.stderr)
+        return 1
+
+    print(format_backtest(payload["report"]))
+    print(f"\nReport : {payload['report'].get('report_file')}")
+    print(f"NAV    : {payload['report'].get('daily_file')}")
+    return 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -290,10 +330,41 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--settle", action="store_true", help="settle matured predictions first")
     p.set_defaults(func=cmd_ledger)
 
+    p = sub.add_parser("backtest", help="daily backtest with costs, CPCV / PBO / DSR")
+    p.add_argument("--start", required=True, help="first date of the backtest window")
+    p.add_argument("--end", default=None, help="defaults to the latest trading day")
+    p.add_argument("--universe", default=None)
+    p.add_argument(
+        "--rebalance-days",
+        type=int,
+        default=config.BACKTEST_REBALANCE_DAYS,
+        help="trading days between rebalances (default: 5)",
+    )
+    p.add_argument(
+        "--exec-price",
+        choices=("close", "open"),
+        default="close",
+        help="price used to fill (default: close, matching the ledger's T+1 close convention)",
+    )
+    p.add_argument("--execution-lag", type=int, default=config.EXECUTION_LAG_DAYS)
+    p.add_argument(
+        "--cost-bps",
+        type=float,
+        default=None,
+        help="override one-way cost in basis points (default: 2bp commission + 5bp slippage)",
+    )
+    p.add_argument("--top-n", type=int, default=10, help="holdings in the top-N strategy")
+    p.add_argument(
+        "--trials",
+        type=int,
+        default=None,
+        help="how many configurations were tried, for the deflated Sharpe (default: the variants run here)",
+    )
+    p.set_defaults(func=cmd_backtest)
+
     for name, phase, help_text in (
         ("valuation", "Phase K1", "index valuation dashboard"),
         ("attribution", "Phase K4", "Brinson / factor attribution"),
-        ("backtest", "Phase 4", "walk-forward backtest with overfitting diagnostics"),
         ("daily", "Phase 6", "end-to-end daily research report"),
     ):
         p = sub.add_parser(name, help=f"{help_text} ({phase}, planned)")

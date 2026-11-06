@@ -157,7 +157,7 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest -q          # 130 passed
+docker compose run --rm app python -m pytest -q          # 174 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
@@ -204,6 +204,10 @@ docker compose run --rm app python -m finagent.cli portfolio --date 2026-11-05
 
 docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
 # 预期：predictions=N，settled=0（首个结算要等满 20 个交易日）
+
+docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
+# 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
+# 回测不进 cron：它是研究工具，数据变了重新跑一次即可
 ```
 
 验证飞书（这一步会真的发一条消息）：
