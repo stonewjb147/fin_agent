@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import numpy as np
@@ -20,14 +21,18 @@ from finagent.evaluation.checks import check_backtest, check_pit_rerun
 from finagent.evaluation.value import (
     break_even_bps,
     cost_sensitivity,
+    effective_breadth,
+    expected_ir,
     extended_metrics,
     ic_by_year,
     ledger_state,
+    net_increment_by_cost,
     relative_metrics,
     required_settled,
     underwater_stats,
     worst_rolling_return,
 )
+from finagent.research.report import evaluate
 
 
 def _panels(n: int = 140, symbols=("510300", "511010"), seed: int = 5):
@@ -135,6 +140,18 @@ def test_break_even_interpolates_between_cost_levels():
     assert break_even_bps([(0.0, 0.05, 0.08), (7.0, 0.03, 0.08)]) is None
 
 
+def test_net_increment_charges_each_strategy_its_own_cost():
+    sensitivity = {
+        "0": {"a": {"cagr": 0.10}, "b": {"cagr": 0.08}},
+        "7": {"a": {"cagr": 0.05}, "b": {"cagr": 0.08}},
+        "20": {"a": {"cagr": 0.00}, "b": {"cagr": 0.08}},
+    }
+    out = net_increment_by_cost(sensitivity, "b", (0.0, 7.0, 20.0))
+    assert out["a"]["0"] == pytest.approx(0.02)
+    assert out["a"]["7"] == pytest.approx(-0.03)
+    assert out["b"]["20"] == pytest.approx(0.0)
+
+
 def test_cost_sensitivity_hurts_high_turnover_more():
     panels, index = _panels(n=200, symbols=("510300", "511010", "512880"))
     cfg = BacktestConfig(start=index[0], end=index[-1], rebalance_days=1)
@@ -142,6 +159,74 @@ def test_cost_sensitivity_hurts_high_turnover_more():
     strategies = {"fast": fast}
     table = cost_sensitivity(panels, strategies, cfg, bps=(0.0, 50.0))
     assert table["0"]["fast"]["cagr"] >= table["50"]["fast"]["cagr"]
+
+
+def _category_effect_frame(days: int = 60):
+    """Two categories: one earns 0.5% a day, the other is flat."""
+    symbols = [f"A{i}" for i in range(4)] + [f"B{i}" for i in range(4)]
+    dates = pd.bdate_range("2024-01-01", periods=days + 1)
+    growth = pd.DataFrame(1.005, index=dates[1:], columns=symbols)
+    growth.loc[:, [s for s in symbols if s.startswith("B")]] = 1.0
+    close = pd.DataFrame(100.0, index=dates, columns=symbols)
+    close.iloc[1:] = 100.0 * growth.cumprod().to_numpy()
+    factors = pd.DataFrame(
+        [
+            {
+                "date": day,
+                "symbol": symbol,
+                "factor": "momentum_20",
+                "value": 1.0 if symbol.startswith("A") else -1.0,
+                "rank_cs": 1.0 if symbol.startswith("A") else -1.0,
+                "z_cs": 1.0 if symbol.startswith("A") else -1.0,
+            }
+            for day in dates
+            for symbol in symbols
+        ]
+    )
+    groups = pd.Series({symbol: symbol[0] for symbol in symbols})
+    return close, factors, groups
+
+
+def test_neutral_ic_removes_a_pure_category_effect():
+    close, factors, groups = _category_effect_frame()
+
+    raw_first = ic_by_year(close, factors, ["momentum_20"], horizons=(1,), min_symbols=8)
+    neutral_first = ic_by_year(
+        close, factors, ["momentum_20"], horizons=(1,), min_symbols=8, groups=groups
+    )
+    assert raw_first[0]["ic_mean"] > 0.9
+    # Once the category mean is gone there is no within-category variation left,
+    # so the IC is undefined rather than merely small.
+    assert neutral_first[0]["ic_neutral"] is None
+
+    report = evaluate(
+        close, factors, groups, ["momentum_20"], (1,), min_symbols=8
+    )
+    test = report["tests"][0]
+    assert test["ic_mean"] > 0.9
+    assert math.isnan(test["ic_mean_neutral"])
+    assert test["significant_neutral"] is False
+    assert {"q_value_neutral", "nw_t_neutral", "dsr_neutral", "long_short_sr_neutral"} <= set(test)
+
+
+def test_effective_breadth_counts_independent_bets_not_columns():
+    rng = np.random.default_rng(0)
+    dates = pd.bdate_range("2024-01-01", periods=300)
+    independent = pd.DataFrame(
+        {f"S{i}": rng.normal(0, 0.01, 300) for i in range(10)}, index=dates
+    )
+    identical = pd.DataFrame({f"S{i}": independent["S0"] for i in range(10)}, index=dates)
+
+    assert effective_breadth(identical)["n_eff"] == pytest.approx(1.0, abs=1e-6)
+    flat = effective_breadth(independent)
+    assert flat["n_eff"] > 8
+    assert flat["avg_corr"] < 0.2
+
+
+def test_expected_ir_follows_the_fundamental_law():
+    assert expected_ir(0.0, 2.7, 20) == 0.0
+    assert expected_ir(0.02, 2.7, 20) == pytest.approx(0.02 * math.sqrt(2.7 * 252 / 20), rel=1e-9)
+    assert expected_ir(0.02, 5.0, 1) > expected_ir(0.02, 2.7, 20)
 
 
 def test_required_settled_matches_normal_approximation():

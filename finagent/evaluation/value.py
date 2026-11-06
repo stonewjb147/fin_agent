@@ -9,9 +9,10 @@ high-turnover strategy to pay for itself. Those are the questions here.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from finagent import config
@@ -19,7 +20,7 @@ from finagent.backtest.costs import cost_from_bps
 from finagent.backtest.engine import BacktestConfig, run_backtest
 from finagent.backtest.metrics import performance
 from finagent.data.panel import forward_returns
-from finagent.factors import get_factor
+from finagent.factors import get_factor, neutralize_cs, winsorize_cs, zscore_cs
 from finagent.factors.build import factor_wide
 from finagent.research.ic import cross_sectional_ic
 
@@ -129,6 +130,28 @@ def cost_sensitivity(
     return out
 
 
+def net_increment_by_cost(
+    sensitivity: Mapping[str, Mapping[str, dict]],
+    baseline: str,
+    levels: Sequence[float],
+    basis: str = "cagr",
+) -> dict[str, dict[str, float]]:
+    """A strategy's return minus the baseline's at the same cost level.
+
+    This is the primary read on a strat: not "it made 10%", but "it beat doing
+    nothing by X after paying its own costs". A strategy that leads at 0bp and
+    trails at 20bp has no edge, only turnover.
+    """
+    keys = [f"{float(level):g}" for level in levels]
+    out: dict[str, dict[str, float]] = {}
+    for name in sensitivity[keys[0]]:
+        base = {key: float(sensitivity[key][baseline][basis]) for key in keys}
+        out[name] = {
+            key: round(float(sensitivity[key][name][basis]) - base[key], 6) for key in keys
+        }
+    return out
+
+
 def break_even_bps(levels: Sequence[tuple[float, float, float]]) -> float | None:
     """One-way cost at which strategy A's CAGR falls to strategy B's.
 
@@ -152,11 +175,15 @@ def ic_by_year(
     *,
     execution_lag: int = config.EXECUTION_LAG_DAYS,
     min_symbols: int = 8,
+    groups: Mapping[str, str] | None = None,
 ) -> list[dict]:
     """Directional IC per calendar year, to show whether a factor is stable.
 
     Same convention as `research.report.evaluate`: the signal is formed at t's
-    close and the return is measured from t+lag to t+lag+h.
+    close and the return is measured from t+lag to t+lag+h. With `groups`, also
+    reports the category-neutral IC, which is the one that answers "can this
+    factor pick a winner inside a category" rather than "did the right category
+    happen to do well".
     """
     rows: list[dict] = []
     for name in names:
@@ -164,23 +191,74 @@ def ic_by_year(
         wide = factor_wide(factors, name)
         if wide.empty:
             continue
+        neutral = (
+            neutralize_cs(zscore_cs(winsorize_cs(wide)), groups) if groups is not None else None
+        )
         fwd_close = close.reindex(index=wide.index, columns=wide.columns)
         for horizon in horizons:
             fwd = forward_returns(fwd_close, horizon).shift(-execution_lag)
             ic = cross_sectional_ic(wide, fwd, min_symbols=min_symbols)
             if ic.empty:
                 continue
+            ic_neutral = (
+                cross_sectional_ic(neutral, fwd, min_symbols=min_symbols) if neutral is not None else None
+            )
             for year, group in ic.groupby(ic.index.year):
+                neutral_value = None
+                if ic_neutral is not None and len(ic_neutral):
+                    neutral_year = ic_neutral[ic_neutral.index.year == year]
+                    if len(neutral_year):
+                        neutral_value = round(float(neutral_year.mean()) * spec.direction, 4)
                 rows.append(
                     {
                         "factor": name,
                         "horizon": int(horizon),
                         "year": int(year),
                         "ic_mean": round(float(group.mean()) * spec.direction, 4),
+                        "ic_neutral": neutral_value,
                         "n_days": int(len(group)),
                     }
                 )
     return rows
+
+
+def effective_breadth(returns: pd.DataFrame, min_periods: int = 60) -> dict:
+    """How many independent bets a cross-section really contains.
+
+    With average pairwise correlation rho, `N` assets behave like
+    `N / (1 + (N-1) * rho)` independent ones. Fifty ETFs whose daily returns
+    correlate 0.36 are worth about 2.7 bets, which is the number that matters
+    for both statistical power and the economics.
+    """
+    corr = returns.corr(min_periods=min_periods)
+    n = int(corr.shape[0])
+    if n < 2:
+        return {"n_symbols": n, "avg_corr": float("nan"), "n_eff": float(n), "n_pairs": 0}
+    mask = np.triu(np.ones(corr.shape, dtype=bool), k=1)
+    pairs = corr.where(mask).stack().dropna()
+    rho = float(pairs.mean()) if len(pairs) else float("nan")
+    if not np.isfinite(rho):
+        n_eff = float(n)
+    else:
+        n_eff = float(np.clip(n / (1.0 + (n - 1.0) * rho), 1.0, float(n)))
+    return {
+        "n_symbols": n,
+        "avg_corr": round(rho, 4) if np.isfinite(rho) else None,
+        "n_eff": round(n_eff, 2),
+        "n_pairs": int(len(pairs)),
+    }
+
+
+def expected_ir(ic: float, n_eff: float, horizon: int = 1, days: int | None = None) -> float:
+    """Fundamental law: IR ≈ IC × sqrt(breadth), breadth = n_eff × days/horizon.
+
+    This is an upper bound on a paper portfolio that pays no costs and bets the
+    full cross-section every `horizon` days. It is here to translate an IC into
+    something comparable with a Sharpe ratio, not as a forecast.
+    """
+    days = days or config.TRADING_DAYS_PER_YEAR
+    breadth = max(n_eff, 1.0) * days / max(horizon, 1)
+    return float(ic * math.sqrt(breadth))
 
 
 def required_settled(margin: float = 0.05, p: float = 0.5, z: float = 1.96) -> int:

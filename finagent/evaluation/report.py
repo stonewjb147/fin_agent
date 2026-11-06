@@ -27,14 +27,17 @@ from finagent.evaluation.checks import (
 from finagent.evaluation.value import (
     break_even_bps,
     cost_sensitivity,
+    effective_breadth,
+    expected_ir,
     extended_metrics,
     ic_by_year,
     ledger_state,
+    net_increment_by_cost,
     yearly_returns,
 )
 from finagent.factors import DEFAULT_FACTORS
 from finagent.portfolio.policy import load_policy
-from finagent.research.report import MIN_SYMBOLS, factor_snapshot
+from finagent.research.report import MIN_SYMBOLS, evaluate, factor_snapshot
 from finagent.signals.score import composite_scores
 
 COST_LEVELS = (0.0, 7.0, 20.0)
@@ -80,6 +83,21 @@ def run_phase_eval(
     factors = factor_snapshot(close, list(DEFAULT_FACTORS), min_obs=MIN_SYMBOLS)
     strategies = default_strategies(universe, composite_scores(factors), policy, top_n=10)
     sensitivity = cost_sensitivity(panels, strategies, cfg, bps=COST_LEVELS)
+
+    groups = universe.groups(as_of)
+    breadth = effective_breadth(close.pct_change(fill_method=None).dropna(how="all"))
+    evidence = evaluate(
+        close,
+        factors,
+        groups,
+        list(DEFAULT_FACTORS),
+        (1, 5, 20),
+        min_symbols=MIN_SYMBOLS,
+    )
+    for test in evidence["tests"]:
+        test["expected_ir_neutral"] = round(
+            expected_ir(test["ic_mean_neutral"], breadth["n_eff"], test["horizon"]), 3
+        )
 
     levels = [
         (
@@ -131,11 +149,16 @@ def run_phase_eval(
                 for name, result in benchmarks.items()
             },
             "cost_sensitivity": sensitivity,
+            "net_increment_vs_equal_weight": net_increment_by_cost(sensitivity, "equal_weight", COST_LEVELS),
             "break_even_bps": {
                 "top_10_vs_policy_no_tilt": break_even_bps(levels),
                 "levels": [{"bps": b, "top_10_cagr": a, "policy_no_tilt_cagr": c} for b, a, c in levels],
             },
-            "factor_ic_by_year": ic_by_year(close, factors, list(DEFAULT_FACTORS), (1, 5, 20)),
+            "breadth": breadth,
+            "factor_evidence": evidence,
+            "factor_ic_by_year": ic_by_year(
+                close, factors, list(DEFAULT_FACTORS), (1, 5, 20), groups=groups
+            ),
             "ledger": ledger,
         },
         "diagnostics": suite["report"].get("diagnostics", {}),
@@ -199,24 +222,56 @@ def format_eval(payload: dict) -> str:
     lines.append("COST SENSITIVITY (net CAGR)")
     header = f"{'':<18}" + "".join(f"{b:>8.0f}bp" for b in COST_LEVELS)
     lines.append(header)
-    row = payload["value"]["cost_sensitivity"]
+    costs = payload["value"]["cost_sensitivity"]
     for name in payload["value"]["strategies"]:
-        lines.append(f"{name:<18}" + "".join(f"{_pct(row[f'{b:g}'][name]['cagr']):>10}" for b in COST_LEVELS))
+        lines.append(f"{name:<18}" + "".join(f"{_pct(costs[f'{b:g}'][name]['cagr']):>10}" for b in COST_LEVELS))
     breakeven = payload["value"]["break_even_bps"]["top_10_vs_policy_no_tilt"]
     lines.append(f"break-even top_10 vs policy_no_tilt: {'none' if breakeven is None else f'{breakeven:.1f}bp/side'}")
+
+    net = payload["value"]["net_increment_vs_equal_weight"]
+    lines.append("")
+    lines.append("NET OF COST (CAGR vs equal_weight, pp)   [primary read]")
+    lines.append(f"{'':<18}" + "".join(f"{f'{b:g}bp':>10}" for b in COST_LEVELS) + f"{'DRAG@7':>10}")
+    for name, increment in net.items():
+        drag = costs[f"{COST_LEVELS[0]:g}"][name]["cagr"] - costs["7"][name]["cagr"]
+        lines.append(
+            f"{name:<18}"
+            + "".join(f"{increment[f'{b:g}'] * 100:>+9.2f} " for b in COST_LEVELS)
+            + f"{drag * 100:>8.2f}pp"
+        )
+
+    breadth = payload["value"].get("breadth")
+    evidence = payload["value"].get("factor_evidence")
+    if evidence:
+        lines.append("")
+        lines.append("FACTOR EVIDENCE (full sample, category-neutral)")
+        lines.append(f"{'FACTOR':16}{'H':>4}{'IC_N':>8}{'t_N':>7}{'q_N':>7}{'LS_N':>7}{'DSR_N':>7}{'EXP_IR':>8}")
+        for test in evidence["tests"]:
+            lines.append(
+                f"{test['factor']:16}{test['horizon']:>4}{test['ic_mean_neutral']:>8.3f}"
+                f"{test['nw_t_neutral']:>7.2f}{test['q_value_neutral']:>7.3f}"
+                f"{test['long_short_sr_neutral']:>7.2f}{test['dsr_neutral']:>7.2f}"
+                f"{test.get('expected_ir_neutral', float('nan')):>8.2f}"
+            )
+    if breadth:
+        lines.append(
+            f"BREADTH  {breadth['n_symbols']} symbols, avg pairwise corr {breadth['avg_corr']} "
+            f"-> {breadth['n_eff']} independent bets"
+        )
 
     ic_rows = payload["value"]["factor_ic_by_year"]
     if ic_rows:
         lines.append("")
-        lines.append("FACTOR IC BY YEAR (directional)")
+        lines.append("FACTOR IC BY YEAR (category-neutral, directional)")
         years = sorted({row["year"] for row in ic_rows})
         lines.append(f"{'FACTOR':<16}{'H':>4}" + "".join(f"{y:>9}" for y in years))
         by_key: dict[tuple[str, int], dict[int, float]] = {}
         for row in ic_rows:
-            by_key.setdefault((row["factor"], row["horizon"]), {})[row["year"]] = row["ic_mean"]
+            by_key.setdefault((row["factor"], row["horizon"]), {})[row["year"]] = row.get("ic_neutral")
         for (factor, horizon), values in sorted(by_key.items()):
             lines.append(
-                f"{factor:<16}{horizon:>4}" + "".join(f"{values.get(y, float('nan')):>9.3f}" for y in years)
+                f"{factor:<16}{horizon:>4}"
+                + "".join(_ic(values.get(y)) for y in years)
             )
 
     ledger = payload["value"]["ledger"]
@@ -240,6 +295,12 @@ def format_eval(payload: dict) -> str:
     if payload.get("report_file"):
         lines.append(f"\nJSON: {payload['report_file']}")
     return "\n".join(lines)
+
+
+def _ic(value) -> str:
+    if value is None or pd.isna(value):
+        return f"{'-':>9}"
+    return f"{float(value):>9.3f}"
 
 
 def _pct(value) -> str:

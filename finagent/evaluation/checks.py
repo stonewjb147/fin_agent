@@ -187,18 +187,24 @@ def check_factor_kernel(
     if report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
         tests = report.get("tests", [])
-        significant = [t["factor"] for t in tests if t.get("significant")]
+        neutral = any("significant_neutral" in test for test in tests)
+        flag = "significant_neutral" if neutral else "significant"
+        dsr_key = "dsr_neutral" if neutral else "dsr"
+        significant = [f"{t['factor']} h={t['horizon']}" for t in tests if t.get(flag)]
+        dsrs = [t.get(dsr_key) for t in tests if t.get(dsr_key) is not None]
         checks.append(
             Check(
                 "Phase 2",
                 "factor_significance",
                 True,
-                f"{len(significant)}/{len(tests)} tests significant at BH q={report.get('meta', {}).get('fdr_q')}",
+                f"{len(significant)}/{len(tests)} {'category-neutral ' if neutral else ''}tests "
+                f"significant at BH q={report.get('meta', {}).get('fdr_q')}",
                 hard=False,
                 evidence={
                     "m_tests": len(tests),
+                    "metric": "neutral" if neutral else "raw",
                     "significant": significant,
-                    "max_dsr": max((t.get("dsr", 0.0) for t in tests), default=None),
+                    "max_dsr": max(dsrs) if dsrs else None,
                 },
             )
         )

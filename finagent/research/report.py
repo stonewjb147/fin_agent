@@ -89,6 +89,7 @@ def evaluate(
             ic = cross_sectional_ic(wide, fwd, min_symbols=min_symbols)
             summary = ic_summary(ic, horizon)
             ic_neutral = cross_sectional_ic(neutral, fwd, min_symbols=min_symbols)
+            neutral_summary = ic_summary(ic_neutral, horizon)
 
             long_short = quantile_spread_returns(
                 wide, fwd, direction=spec.direction, min_symbols=min_symbols
@@ -96,6 +97,17 @@ def evaluate(
             sampled = long_short.iloc[::horizon] if len(long_short) else long_short
             periods = max(1, config.TRADING_DAYS_PER_YEAR // horizon)
             dsr = deflated_sharpe(sampled, n_trials=len(names) * len(horizons))
+
+            # Same long-short book after removing category means: this is the
+            # part of the trade that cannot be earned by simply owning the
+            # category that happened to do well.
+            long_short_neutral = quantile_spread_returns(
+                neutral, fwd, direction=spec.direction, min_symbols=min_symbols
+            )
+            sampled_neutral = (
+                long_short_neutral.iloc[::horizon] if len(long_short_neutral) else long_short_neutral
+            )
+            dsr_neutral = deflated_sharpe(sampled_neutral, n_trials=len(names) * len(horizons))
 
             available = int((wide.notna().sum(axis=1) >= min_symbols).sum())
             tests.append(
@@ -106,10 +118,15 @@ def evaluate(
                     "horizon": horizon,
                     **summary,
                     "ic_mean_directional": summary["ic_mean"] * spec.direction,
-                    "ic_mean_neutral": float(ic_neutral.mean()) if len(ic_neutral) else float("nan"),
+                    "ic_mean_neutral": neutral_summary["ic_mean"],
+                    "nw_t_neutral": neutral_summary["nw_t"],
+                    "p_value_neutral": neutral_summary["p_value"],
+                    "icir_neutral": neutral_summary["icir"],
                     "coverage": summary["n"] / available if available else float("nan"),
                     "long_short_sr": sharpe_ratio(sampled, periods=periods),
                     "dsr": dsr["dsr"],
+                    "long_short_sr_neutral": sharpe_ratio(sampled_neutral, periods=periods),
+                    "dsr_neutral": dsr_neutral["dsr"],
                 }
             )
 
@@ -118,6 +135,18 @@ def evaluate(
     for test, q_value, reject in zip(tests, qvalues, bh_fdr(pvalues, q=q), strict=True):
         test["q_value"] = q_value
         test["significant"] = bool(reject)
+
+    # The category-neutral IC is the primary metric. A raw IC mixes "which
+    # asset class won" into "which ETF within the class won"; in this pool the
+    # first effect dwarfs the second, so testing raw IC answers the wrong
+    # question. Both families are corrected separately and reported.
+    pvalues_neutral = [t["p_value_neutral"] for t in tests]
+    qvalues_neutral = bh_qvalues(pvalues_neutral)
+    for test, q_value, reject in zip(
+        tests, qvalues_neutral, bh_fdr(pvalues_neutral, q=q), strict=True
+    ):
+        test["q_value_neutral"] = q_value
+        test["significant_neutral"] = bool(reject)
 
     return {
         "tests": tests,
@@ -137,18 +166,26 @@ def evaluate(
                 "are NaN by construction. ICIR annualises by sqrt(252/h). t-statistics use "
                 "Newey-West with max(h-1, 4*(n/100)^(2/9)) lags. Long-short returns are "
                 "top-vs-bottom thirds, equal weight, no costs, sampled every h days for the "
-                "Sharpe/DSR statistics."
+                "Sharpe/DSR statistics. The *_neutral columns repeat everything after "
+                "subtracting each date's category mean, so the signal cannot be earned by "
+                "owning the category that happened to do well; they are the primary "
+                "read, the raw columns are kept for comparison."
             ),
         },
     }
 
 
 def bh_qvalues(pvalues: Sequence[float]) -> list[float]:
-    """Benjamini-Hochberg adjusted p-values, aligned with the input order."""
+    """Benjamini-Hochberg adjusted p-values, aligned with the input order.
+
+    A NaN p-value is treated as 1.0: it cannot be rejected, and letting NaN into
+    the running minimum would poison every earlier (smaller) p-value.
+    """
     arr = np.asarray(pvalues, dtype=float)
     m = arr.size
     if m == 0:
         return []
+    arr = np.where(np.isfinite(arr), arr, 1.0)
     order = np.argsort(arr, kind="stable")
     adjusted = arr[order] * m / np.arange(1, m + 1)
     adjusted = np.minimum.accumulate(adjusted[::-1])[::-1].clip(0.0, 1.0)
@@ -230,19 +267,25 @@ def format_summary(report: dict) -> str:
         f"Factor report {report['as_of']}  symbols={report['n_symbols']}  "
         f"universe={report['universe_version']}  data={report['data_start']}..{report['data_end']}",
         "",
-        f"{'FACTOR':14s} {'H':>3s} {'N':>5s} {'IC':>7s} {'ICIR':>7s} "
-        f"{'t':>6s} {'q':>6s} {'LS_SR':>6s} {'DSR':>5s}  SIG",
+        f"{'FACTOR':14s} {'H':>3s} {'N':>5s} {'IC':>7s} {'IC_N':>7s} {'t_N':>6s} "
+        f"{'q_N':>6s} {'LS':>6s} {'LS_N':>6s} {'DSR_N':>5s}  SIG",
     ]
     for test in report["tests"]:
         lines.append(
             f"{test['factor']:14s} {test['horizon']:3d} {test['n']:5d} "
-            f"{test['ic_mean']:7.3f} {test['icir']:7.2f} {test['nw_t']:6.2f} "
-            f"{test['q_value']:6.3f} {test['long_short_sr']:6.2f} {test['dsr']:5.2f}  "
-            f"{'yes' if test['significant'] else ''}"
+            f"{test['ic_mean']:7.3f} {test['ic_mean_neutral']:7.3f} {test['nw_t_neutral']:6.2f} "
+            f"{test['q_value_neutral']:6.3f} {test['long_short_sr']:6.2f} "
+            f"{test['long_short_sr_neutral']:6.2f} {test['dsr_neutral']:5.2f}  "
+            f"{'yes' if test['significant_neutral'] else ''}"
         )
     meta = report["meta"]
     lines.append(
         f"\nm={meta['m_tests']} tests, BH-FDR q={meta['fdr_q']}, "
         f"IC method={meta['ic_method']}, annualisation={meta['trading_days_per_year']} days"
     )
+    lines.append(
+        "columns: IC raw mean, IC_N category-neutral mean, t_N/q_N neutral HAC t and BH q, "
+        "LS raw long-short Sharpe, LS_N neutral long-short Sharpe, DSR_N neutral Deflated Sharpe"
+    )
+    lines.append("SIG is decided on the category-neutral family; raw q_value stays in the JSON")
     return "\n".join(lines)
