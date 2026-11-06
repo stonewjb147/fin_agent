@@ -129,7 +129,7 @@ composite_after = composite_before + contribution
 | PIT | `test_future_headlines_are_not_usable`；资金流快照 > as_of 被丢弃（`test_flow_scores_use_accumulated_snapshots_and_respect_as_of`） |
 | 板块 → ETF 映射 | `test_sectors_and_themes_reach_etfs` |
 
-全量测试 207 passed。
+Phase 5 完成时全量测试 207 passed；Phase 6 之后为 225。
 
 ## 4. 复现
 

@@ -15,6 +15,8 @@ from datetime import date
 from pathlib import Path
 
 from finagent import config
+from finagent.agent.evidence import EvidenceError
+from finagent.agent.report import ReportError, format_report, generate_report
 from finagent.backtest.costs import DEFAULT_COST, cost_from_bps
 from finagent.backtest.report import format_backtest, run_backtest_suite
 from finagent.data.akshare_provider import default_provider
@@ -285,6 +287,40 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _latest_signal_date() -> str:
+    files = sorted(config.SIGNAL_DIR.glob("*.json"))
+    if not files:
+        raise EvidenceError(
+            f"no signal files in {config.SIGNAL_DIR}; run `finagent signals` first"
+        )
+    return files[-1].stem
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    as_of = args.date or _latest_signal_date()
+    if args.date and not (config.SIGNAL_DIR / f"{as_of}.json").exists():
+        print(
+            f"report: no signals for {as_of}; run `finagent signals --date {as_of}` first",
+            file=sys.stderr,
+        )
+        return 1
+    out_dir = Path(args.out) if args.out else None
+    try:
+        result = generate_report(
+            as_of,
+            use_llm=not args.no_llm,
+            out_dir=out_dir,
+            model=args.model,
+        )
+    except (EvidenceError, ReportError) as exc:
+        print(f"report: {exc}", file=sys.stderr)
+        return 1
+    print(format_report(result))
+    if args.json:
+        print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -396,10 +432,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=cmd_backtest)
 
+    p = sub.add_parser("report", help="grounded LLM narrative report with deterministic fallback")
+    p.add_argument("--date", default=None, help="defaults to the latest signal file")
+    p.add_argument("--no-llm", action="store_true", help="use the deterministic template only")
+    p.add_argument("--model", default=None, help="override the LLM model (default: deepseek-chat)")
+    p.add_argument("--out", default=None, help="output directory (default: data/reports)")
+    p.add_argument("--json", action="store_true", help="also print the full JSON payload")
+    p.set_defaults(func=cmd_report)
+
     for name, phase, help_text in (
         ("valuation", "Phase K1", "index valuation dashboard"),
         ("attribution", "Phase K4", "Brinson / factor attribution"),
-        ("daily", "Phase 6", "end-to-end daily research report"),
     ):
         p = sub.add_parser(name, help=f"{help_text} ({phase}, planned)")
         p.set_defaults(func=_planned(phase))

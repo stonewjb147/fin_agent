@@ -12,6 +12,12 @@ from dataclasses import dataclass, field
 
 CITATION_RE = re.compile(r"\[(?:chunk|ref|snap):([^\]]+)\]")
 NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?%?")
+# Dates are context, not claims: 2026-11-05, 2026/11/05, 2026年11月5日, 20261105.
+DATE_RE = re.compile(
+    r"(?:19|20)\d{2}[-/.](?:1[0-2]|0?[1-9])[-/.](?:3[01]|[12]\d|0?[1-9])"
+    r"|(?:19|20)\d{2}\s*年\s*(?:1[0-2]|0?[1-9])\s*月(?:\s*(?:3[01]|[12]\d|0?[1-9])\s*日?)?"
+    r"|\b(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\b"
+)
 
 
 @dataclass
@@ -56,10 +62,16 @@ def forbidden_hits(text: str, terms: list[str]) -> list[str]:
     return [t for t in terms if t in text]
 
 
-def extract_numbers(text: str) -> list[float]:
-    # Citation ids like [snap:val:000300:pe_pct] are references, not claims.
+def extract_numbers(text: str, ignore_terms: list[str] | None = None) -> list[float]:
+    # Citation ids like [snap:val:000300:pe_pct] are references, not claims,
+    # dates (2026-11-05) are context, and identifiers such as 沪深300ETF or
+    # 510300 are names rather than evidence values.
+    stripped = text or ""
+    for term in sorted(ignore_terms or [], key=len, reverse=True):
+        stripped = stripped.replace(term, " ")
+    stripped = DATE_RE.sub(" ", stripped)
     values: list[float] = []
-    for token in NUMBER_RE.findall(CITATION_RE.sub(" ", text or "")):
+    for token in NUMBER_RE.findall(CITATION_RE.sub(" ", stripped)):
         raw = token.rstrip("%")
         try:
             values.append(float(raw))
@@ -68,17 +80,28 @@ def extract_numbers(text: str) -> list[float]:
     return values
 
 
-def numeric_traceability(text: str, allowed_values: list[float], *, tol: float = 0.01, ignore_years: bool = True) -> dict:
+def numeric_traceability(
+    text: str,
+    allowed_values: list[float],
+    *,
+    tol: float = 0.01,
+    ignore_years: bool = True,
+    ignore_values: list[float] | None = None,
+    ignore_terms: list[str] | None = None,
+) -> dict:
     """Fraction of numbers in `text` that match an allowed evidence value.
 
-    Years and small ordinal numbers are ignored; percentages are compared on
-    their numeric token (3% -> 3.0), so reports must not silently mix 0.03 and
-    3%.
+    Years, dates and `ignore_values` (typically six-digit ETF codes) are not
+    claims; percentages are compared on their numeric token (3% -> 3.0), so
+    reports must not silently mix 0.03 and 3%.
     """
-    numbers = extract_numbers(text)
+    ignored = {float(v) for v in (ignore_values or [])}
+    numbers = extract_numbers(text, ignore_terms=ignore_terms)
     checked = []
     for value in numbers:
         if ignore_years and 1900 <= value <= 2100 and float(value).is_integer():
+            continue
+        if float(value) in ignored:
             continue
         checked.append(value)
     if not checked:
@@ -90,6 +113,48 @@ def numeric_traceability(text: str, allowed_values: list[float], *, tol: float =
         "score": 1 - len(untraceable) / len(checked),
         "checked": len(checked),
         "untraceable": untraceable[:20],
+    }
+
+
+def strict_untraceable(
+    text: str,
+    allowed_values: list[float],
+    *,
+    ignore_values: list[float] | None = None,
+    ignore_terms: list[str] | None = None,
+) -> dict:
+    """Stricter report gate: every number must be a rounded rendering of an allowed value.
+
+    `numeric_traceability` allows a relative tolerance and a 5% failure budget,
+    which is right for an eval suite but too loose for a daily report: one
+    invented figure, or extra precision the evidence never had, must fail.
+    """
+    stripped = text or ""
+    for term in sorted(ignore_terms or [], key=len, reverse=True):
+        stripped = stripped.replace(term, " ")
+    stripped = DATE_RE.sub(" ", stripped)
+    stripped = CITATION_RE.sub(" ", stripped)
+    ignored = {float(v) for v in (ignore_values or [])}
+    checked = 0
+    bad: list[float] = []
+    for token in NUMBER_RE.findall(stripped):
+        raw = token.rstrip("%")
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if 1900 <= value <= 2100 and value.is_integer():
+            continue
+        if value in ignored:
+            continue
+        checked += 1
+        decimals = len(raw.split(".", 1)[1]) if "." in raw else 0
+        if not any(abs(value - round(float(a), decimals)) <= 1e-9 for a in allowed_values):
+            bad.append(value)
+    return {
+        "score": 1.0 if not checked else 1 - len(bad) / checked,
+        "checked": checked,
+        "untraceable": bad,
     }
 
 
@@ -110,6 +175,9 @@ def score_case(case: dict, answer: str, evidence_ids: list[str] | None = None) -
             score.fail(f"citation accuracy {cit['score']:.2f} < 0.90")
         if cit["invalid"]:
             score.fail(f"invalid citations: {cit['invalid'][:5]}")
+        minimum = case.get("min_citations")
+        if minimum is not None and cit["cited"] < int(minimum):
+            score.fail(f"only {cit['cited']} citation(s), need at least {minimum}")
 
     if case.get("must_include"):
         missing = [m for m in case["must_include"] if m not in (answer or "")]
@@ -124,7 +192,12 @@ def score_case(case: dict, answer: str, evidence_ids: list[str] | None = None) -
             score.fail(f"forbidden terms: {hits}")
 
     if case.get("allowed_values"):
-        trace = numeric_traceability(answer, case["allowed_values"])
+        trace = numeric_traceability(
+            answer,
+            case["allowed_values"],
+            ignore_values=case.get("ignore_values"),
+            ignore_terms=case.get("ignore_terms"),
+        )
         score.details["numeric"] = trace
         if trace["score"] < 0.95:
             score.fail(f"numeric traceability {trace['score']:.2f} < 0.95")

@@ -50,6 +50,20 @@ def test_numeric_traceability_flags_invented_numbers():
     assert result["untraceable"] == [42.0]
 
 
+def test_numeric_traceability_ignores_dates_and_identifier_values():
+    text = "2024-06-28 组合中 510300 权重 50.0%，2024年6月28日复核"
+    result = numeric_traceability(text, [50.0], ignore_values=[510300])
+    assert result["checked"] == 1
+    assert result["score"] == 1.0
+
+
+def test_min_citations_is_a_gate():
+    case = {"id": "c2", "required_citations": True, "min_citations": 2}
+    one = score_case(case, "[snap:val:000300:pe_pct]", EVIDENCE)
+    assert not one.passed
+    assert any("at least 2" in f for f in one.details["failures"])
+
+
 def test_numbers_inside_citation_ids_are_not_claims():
     text = "PE 分位 15.43% [snap:val:000300:pe_pct]"
     result = numeric_traceability(text, [15.43])
