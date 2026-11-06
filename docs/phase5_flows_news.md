@@ -37,6 +37,8 @@ SHARE CHANGE (z, mapped ETFs): no scores (source unavailable)
 PREMIUM / DISCOUNT (z, mapped ETFs): no scores (source unavailable)
 ```
 
+云端（服务器缓存里已有 2026-11-05 的采集结果）同一天输出只有 **MISSING 的原因**不同：`etf_scale_sse` 有 1 个快照（「need at least two snapshots to measure a change」）、`etf_nav` 有 1 只标的（「only 1 symbols have a same-day close and NAV」）。四项资金流判定仍是 1 个可用、3 个 unavailable，可见降级逻辑与实际缓存内容对齐，而不是写死的一句话。
+
 `signals` 在缺新闻文件时的行为：
 
 ```text

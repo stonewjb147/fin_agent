@@ -205,8 +205,13 @@ docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
 # 预期：predictions=N，settled=0（首个结算要等满 20 个交易日）
 
 docker compose run --rm app python -m finagent.cli flows --date 2026-11-05
-# 实测：sector_flow_rank 只有 1 天快照 -> 明确 unavailable（从 2026-11-05 开始每天累积）
-# etf_scale_sse / etf_nav 无缓存 -> unavailable；market_flow 可用；news 文件缺失 -> unavailable
+# 实测（云端）：sector_flow_rank 只有 1 天快照 -> unavailable（从 2026-11-05 起每天累积一个）
+# etf_scale_sse 只有 1 个快照（算不了变化）、etf_nav 只有 1 只同日净值 -> unavailable
+# market_flow 可用；news 文件缺失 -> unavailable
+# 三条资金流判定都是 MISSING，但每行都写明了缺什么——这就是「缺源降级」的验收
+docker compose run --rm app python -m finagent.cli signals --date 2026-11-05
+# 末尾应出现：news overlay: skipped — no news file at /app/data/news/2026-11-05.json
+# 分数与 Phase 5 之前一致（叠加不可用不改分数）
 
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
