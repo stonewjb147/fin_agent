@@ -13,7 +13,7 @@
 | Phase 2 因子内核（动量 / 反转 / 波动 → IC/ICIR / 多重检验） | 完成 |
 | Phase 3 组合构建 + 结构化信号 + 预测账本 | 完成 |
 | Phase 4 真实回测（T+1 / 成本 / CPCV / DSR / PBO） | 完成 |
-| Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) |
+| Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) 与[学习笔记](docs/phase1_4_notes.md) |
 | Phase 5 资金流 + 新闻叠加（缺源降级、有界可解释） | 完成，数据受限，见 [`docs/phase5_flows_news.md`](docs/phase5_flows_news.md)（§5 学习笔记） |
 | Phase 6 LLM 报告与评测、Phase 7 风控合规、Phase 8~10 成长闭环 | 计划中 |
 
@@ -129,7 +129,7 @@ finagent/
   agent/      # LangGraph、报告、偏差自检（Phase 6）
   evals/      # golden set、引用/数字可追溯/格式指标
 configs/      # universe / catalog / 后续 factors、ips、holdings
-docs/         # 评测报告（phase1_4_eval.md、phase5_flows_news.md）
+docs/         # 评测报告（phase1_4_eval.md、phase5_flows_news.md）与学习笔记（phase1_4_notes.md）
 tests/        # 全部离线，不联网
 scripts/      # 每日采集、健康检查、源探测、Phase 1-4 评测
 ```

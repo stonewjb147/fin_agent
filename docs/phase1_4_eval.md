@@ -4,6 +4,8 @@
 本文所有数字由 `scripts/phase_eval.py` 在本地真实缓存上算出，原始结果在 `data/quality/phase_eval_2026-11-05.json`。
 数字不是 LLM 写的，解读是。
 
+> 学习版总结（设计取舍、代码地图、常见错误、练习）见 [`docs/phase1_4_notes.md`](phase1_4_notes.md)。
+
 ## 0. 结论先行
 
 | Phase | 内容 | 判定 | 一句话价值 |
