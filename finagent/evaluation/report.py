@@ -142,6 +142,8 @@ def run_phase_eval(
         "checks": [check.to_dict() for check in checks],
         "summary": {
             "checks_total": len(checks),
+            "checks_hard_total": sum(1 for c in checks if c.hard),
+            "checks_soft_total": sum(1 for c in checks if not c.hard),
             "checks_hard_failed": [c.name for c in checks if c.hard and not c.ok],
             "checks_soft_failed": [c.name for c in checks if not c.hard and not c.ok],
         },
@@ -225,9 +227,13 @@ def format_eval(payload: dict) -> str:
         f"need {ledger['required_settled_5pct']} independent calls for +-5%"
     )
 
-    failed = payload["summary"]["checks_hard_failed"]
+    hard = [c for c in payload["checks"] if c["hard"]]
+    soft = [c for c in payload["checks"] if not c["hard"]]
     lines.append("")
-    lines.append(f"CHECKS  {payload['summary']['checks_total'] - len(failed)}/{payload['summary']['checks_total']} hard checks passed")
+    lines.append(
+        f"CHECKS  {sum(c['ok'] for c in hard)}/{len(hard)} hard passed, "
+        f"{sum(c['ok'] for c in soft)}/{len(soft)} informational"
+    )
     for check in payload["checks"]:
         if check["hard"] and not check["ok"]:
             lines.append(f"  FAIL {check['name']}: {check['detail']}")

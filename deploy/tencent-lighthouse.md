@@ -209,7 +209,7 @@ docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 回测不进 cron：它是研究工具，数据变了重新跑一次即可
 
 docker compose run --rm app python scripts/phase_eval.py --start 2023-01-01 --end 2026-11-05
-# 实测：26/26 硬检查通过 + 价值表 + 成本敏感性 + 分年 IC + 账本状态；本机 95 秒（单核为主）
+# 实测：22/22 硬检查 + 4/4 信息项通过 + 价值表 + 成本敏感性 + 分年 IC + 账本状态；本机 95 秒（单核为主）
 # 产出 data/quality/phase_eval_<date>.json；云端数字应与本地逐位一致（同一缓存、同一引擎）
 ```
 
