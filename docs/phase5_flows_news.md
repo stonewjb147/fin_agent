@@ -124,12 +124,12 @@ composite_after = composite_before + contribution
 
 | 验收项 | 证据 |
 |---|---|
-| 缺少任一数据源时链路降级并标注 | `tests/test_flows.py::test_one_snapshot_is_not_a_flow_trend`、`test_flows_report_names_every_missing_source`；`tests/test_news_overlay.py::test_missing_news_file_degrades_with_a_reason`、`test_pipeline_reports_a_missing_overlay_instead_of_guessing` |
+| 缺少任一数据源时链路降级并标注 | `tests/test_flows.py::test_one_snapshot_is_not_a_flow_trend`、`test_flows_report_names_every_missing_source`；`tests/test_news_overlay.py::test_missing_news_file_degrades_with_a_reason`、`test_file_with_no_usable_items_explains_what_was_dropped`、`test_pipeline_reports_a_missing_overlay_instead_of_guessing` |
 | 新闻叠加对分数的影响可解释 | `test_overlay_is_bounded_changes_only_the_latest_day_and_reports_its_size`、`test_overlay_cap_applies_before_the_score_moves`、`test_pipeline_applies_news_to_the_reported_score`（composite 变化 = contribution） |
 | PIT | `test_future_headlines_are_not_usable`；资金流快照 > as_of 被丢弃（`test_flow_scores_use_accumulated_snapshots_and_respect_as_of`） |
 | 板块 → ETF 映射 | `test_sectors_and_themes_reach_etfs` |
 
-全量测试 206 passed。
+全量测试 207 passed。
 
 ## 4. 复现
 
@@ -138,6 +138,61 @@ python -m finagent.cli flows --date 2026-11-05
 python -m finagent.cli flows --date 2026-11-05 --json
 python -m finagent.cli signals --date 2026-11-05 --news data/news/2026-11-05.json --news-weight 0.2
 ```
+
+### 4.1 真实缓存上的叠加演示（`write=False`，不写盘）
+
+`signals --news` 会写信号文件并追加账本；只想验证叠加本身时，用 API 跑一份临时新闻：
+
+```python
+import json, pathlib, tempfile
+from finagent import config
+from finagent.data.panel import as_date
+from finagent.data.universe import load_universe
+from finagent.factors import DEFAULT_FACTORS, load_close_panel
+from finagent.news import apply_news_overlay, load_news, load_news_map, news_scores
+from finagent.research.report import MIN_SYMBOLS, factor_snapshot
+from finagent.signals.pipeline import run_signal_pipeline
+from finagent.signals.score import composite_scores
+
+day = as_date("2026-11-05")
+universe = load_universe(config.CONFIG_DIR / "universe.yaml")
+close = load_close_panel(config.CACHE_DIR, universe.symbols(day), day)
+factors = factor_snapshot(close, list(DEFAULT_FACTORS), min_obs=MIN_SYMBOLS)
+scores = composite_scores(factors)
+
+news = {"items": [
+    {"title": "半导体设备订单超预期", "published_at": "2026-11-05T09:00:00+08:00",
+     "sectors": ["半导体"], "sentiment": 0.8},
+    {"title": "人工智能政策落地", "published_at": "2026-11-05T10:30:00+08:00",
+     "themes": ["人工智能"], "sentiment": 0.5},
+    {"title": "券商两融收紧", "published_at": "2026-11-05T11:00:00+08:00",
+     "sectors": ["证券"], "sentiment": -0.6},
+    {"title": "明天的消息", "published_at": "2026-11-06T09:00:00+08:00",
+     "symbols": ["510300"], "sentiment": 1.0},          # 应被 PIT 丢弃
+]}
+path = pathlib.Path(tempfile.mkdtemp()) / "news.json"
+path.write_text(json.dumps(news, ensure_ascii=False), encoding="utf-8")
+
+loaded = load_news(path, day)                          # dropped_future == 1
+frame, diag = news_scores(loaded, universe, day, mapping=load_news_map())
+adjusted, contrib = apply_news_overlay(scores, frame, weight=0.20, max_abs=0.30)
+result = run_signal_pipeline(universe, as_of=day, cache_dir=config.CACHE_DIR,
+                             news_path=path, write=False)
+```
+
+实测（2026-11-05，50 只有分数）：
+
+| symbol | news_score | contribution | composite before → after | 命中方式 |
+|---|---|---|---|---|
+| 159516 | +0.8 | +0.16 | -1.98 → -1.82 | `sectors: 半导体` |
+| 512480 | +0.8 | +0.16 | -1.04 → -0.88 | `sectors: 半导体` |
+| 588170 | +0.8 | +0.16 | -2.28 → -2.12 | `sectors: 半导体` |
+| 512880 | -0.6 | -0.12 | +0.27 → +0.15 | `sectors: 证券` |
+
+- 4 条新闻：1 条日期在未来被丢弃，2 条命中 ETF，1 条（人工智能主题）在池内没有对应 `flow_sectors` 的标的，计为 unmatched，不进入任何均值
+- 其余 **46 只标的变化严格为 0**；只有 `as_of` 当天被改
+- `|after − before − contribution| = 1.11e-16`（浮点误差），限幅 0.30 未触发
+- 叠加前后都是 **15 条信号**，没有标的跨越 `min_composite=0.25`——±0.16 的调整不足以改变结论，这正是「有界」的意义
 
 ## 5. 学习笔记（这一阶段值得记住的东西）
 
@@ -240,7 +295,7 @@ contribution = clip(weight × news_score, ±max_abs)     # 默认 0.20 / 0.30
 | `configs/news_map.yaml` | 主题词表 | `themes: {sectors, symbols, categories}` |
 | `finagent/signals/pipeline.py` | 叠加接入信号 | `run_signal_pipeline(..., news_path=...)` |
 | `finagent/cli.py` | 入口 | `flows`、`signals --news` |
-| `tests/test_flows.py`、`tests/test_news_overlay.py` | 降级与可解释性 | 13 条测试 |
+| `tests/test_flows.py`、`tests/test_news_overlay.py` | 降级与可解释性 | 14 条测试 |
 
 建议阅读顺序：`data/sources.py` → `flows/sector.py` 的 `load_sector_flow_history`（看三层状态）→ `news/overlay.py` 的 `load_news`（看 PIT）→ `apply_news_overlay`（看有界叠加）→ `signals/pipeline.py` 的叠加段（看怎么接入而不破坏原有分数）。
 

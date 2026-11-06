@@ -46,6 +46,25 @@ def test_future_headlines_are_not_usable(tmp_path):
     assert loaded.dropped_future == 1
 
 
+def test_file_with_no_usable_items_explains_what_was_dropped(tmp_path):
+    path = _write(
+        tmp_path,
+        [
+            {"title": "明天的消息", "published_at": "2024-06-29T09:30:00+08:00", "sentiment": 0.9},
+            {"title": "", "sentiment": 0.5},
+            {"title": "情绪值坏了", "sentiment": "n/a"},
+        ],
+    )
+    loaded = load_news(path, "2024-06-28")
+
+    assert not loaded.available
+    assert "no usable item" in loaded.status.reason
+    assert "1 future item(s) dropped" in loaded.status.reason
+    assert "2 invalid item(s) dropped" in loaded.status.reason
+    assert loaded.dropped_future == 1
+    assert loaded.dropped_invalid == 2
+
+
 def test_missing_news_file_degrades_with_a_reason(tmp_path):
     loaded = load_news(tmp_path / "absent.json", "2024-06-28")
 

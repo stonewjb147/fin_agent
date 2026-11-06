@@ -144,6 +144,8 @@ def load_news(path: str | Path, as_of: date | str) -> NewsLoad:
         reason = f"{path} has no usable item on or before {cutoff}"
         if future:
             reason += f" ({future} future item(s) dropped)"
+        if invalid:
+            reason += f" ({invalid} invalid item(s) dropped)"
         return NewsLoad(
             items=[], status=SourceStatus.missing("news", reason), dropped_future=future, dropped_invalid=invalid
         )

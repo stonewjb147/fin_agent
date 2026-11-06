@@ -40,9 +40,9 @@ python scripts/phase_eval.py --start 2023-01-01 --bond 511260
 - `finagent/evaluation/benchmarks.py` — 基准策略复用**同一个**回测引擎、同一套成本、同样的 T+1 收盘成交，不另写净值算法。
 - `finagent/evaluation/value.py` — 基准对比、成本敏感性、净成本增量、类别中性分年 IC、有效广度、账本状态。
 
-`pytest` 现在是 193 passed（评测与回归新增 19 条）。注意：`pyproject.toml` 里 `addopts = "-q"`，命令行再加 `-q` 会变成 `-qq` 把汇总行吞掉，所以文档里统一写 `pytest` 或 `pytest --collect-only -q` 计数。
+评测完成时 `pytest` 为 193 passed（评测与回归新增 19 条）；Phase 5 之后全量是 207。注意：`pyproject.toml` 里 `addopts = "-q"`，命令行再加 `-q` 会变成 `-qq` 把汇总行吞掉，所以文档里统一写 `pytest` 或 `pytest --collect-only -q` 计数。
 
-**云端复核**：同一条命令在 Lighthouse（`/opt/finagent`，同一份缓存）上跑出的 JSON 与本地逐字段一致——只有绝对路径、快照 id（`snap-20261105-ffe58d7a` 本地 / `snap-20261105-6ede3bf7` 云端）和 `generated_at` 不同，所有指标、成本敏感性、类别中性 IC、有效广度、分年 IC、诊断值完全相同。云端 193 tests passed、22/22 硬检查 + 4/4 信息项通过。
+**云端复核**：同一条命令在 Lighthouse（`/opt/finagent`，同一份缓存）上跑出的 JSON 与本地逐字段一致——只有绝对路径、快照 id（`snap-20261105-ffe58d7a` 本地 / `snap-20261105-6ede3bf7` 云端）和 `generated_at` 不同，所有指标、成本敏感性、类别中性 IC、有效广度、分年 IC、诊断值完全相同。云端当时 193 tests passed、22/22 硬检查 + 4/4 信息项通过（Phase 5 部署后为 207）。
 
 ## 2. 验收检查（真实缓存，不是合成数据）
 
