@@ -28,6 +28,9 @@ agent = [
     "langchain-deepseek>=0.1",
     "langfuse>=2",
 ]
+web = [
+    "streamlit>=1.37",
+]
 
 [tool.setuptools.packages.find]
 include = ["finagent*"]

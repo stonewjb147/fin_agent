@@ -33,7 +33,7 @@ ARG PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
 # __file__, so `pip install .` would point configs/ at site-packages instead
 # of /app and universe.yaml would not be found.
 RUN pip install --upgrade pip --index-url "$PIP_INDEX_URL" --retries 5 --timeout 30 \
-    && pip install -c deploy/constraints.txt -e ".[dev]" \
+    && pip install -c deploy/constraints.txt -e ".[dev,web]" \
       --index-url "$PIP_INDEX_URL" --retries 5 --timeout 30
 
 COPY configs ./configs

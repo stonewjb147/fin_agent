@@ -264,11 +264,11 @@ crontab -l                            # 确认十一条任务（含 18:50 报告
 ```
 
 - 18:30 周一~五：`collect_daily.py`
+- 18:38 周一~五：`health_check.py --alert feishu`。**必须排在风控和成长之前**：两者都读 `health_<date>.json`，文件缺失时风控只会记 info，当天的数据错误反而不会阻断
 - 18:40 周一~五：`factor-report`（只读缓存，不联网）
 - 18:45 周一~五：`signals`（先结算到期预测，再写当日信号并入账）
 - 18:47 周一~五：`portfolio`（目标权重，只读缓存）
 - 18:48 周一~五：`risk`（硬/软约束，写 `data/quality/risk_<date>.json`）
-- 19:10 周一~五：`health_check.py --alert feishu`
 - 18:50 周一~五：`report`（有 `DEEPSEEK_API_KEY` 走 LLM，没有或调用失败写确定性模板，`fallback_reason` 记录原因）
 - 18:55 周一~五：`growth`（成长状态；写 `data/growth/growth_<date>.json`）
 - 19:05 周一~五：`journal --review`（到期的人工决策按价格复盘；没有记录时只打印空摘要）
@@ -285,6 +285,29 @@ docker compose run --rm app python -m finagent.cli signals >> logs/cron.log 2>&1
 docker compose run --rm app python scripts/health_check.py --alert feishu; echo "exit=$?"
 tail -50 logs/cron.log
 ```
+
+### 网页界面（可选）
+
+镜像里包含 Streamlit（`.[dev,web]`），web 服务复用同一个镜像，只监听服务器回环地址：
+
+```bash
+cd /opt/finagent
+docker compose build
+docker compose --profile web up -d web
+docker compose --profile web ps
+docker compose --profile web logs --tail=50 web
+```
+
+本机开隧道（不要把 8501 加到防火墙放行列表）：
+
+```bash
+ssh -L 8501:127.0.0.1:8501 ubuntu@<host>
+# 浏览器打开 http://localhost:8501
+```
+
+页面只读取 `data/`；「运行流水线」会调用与 cron 相同的命令，运行日期可选。网页里录入的决策写入 `data/journal/entries.jsonl`，与 CLI 完全同一份文件。
+
+更新代码后：`git pull`（或 bundle）→ `docker compose build` → `docker compose --profile web up -d web`。只重启 web 不会加载新代码，因为代码在镜像里。
 
 ---
 

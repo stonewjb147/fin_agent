@@ -92,6 +92,38 @@ python scripts/health_check.py --alert feishu
 make check
 ```
 
+## 网页界面（不用命令行）
+
+```bash
+pip install -e ".[web]"
+streamlit run finagent/web/app.py          # 或 make web
+```
+
+浏览器打开 `http://localhost:8501`。页面只读取 `data/` 下已有工件，不重新计算策略：
+
+| 页面 | 内容 |
+|---|---|
+| 今日总览 | 成长等级、风控状态、报告门禁、结算进度、下一步行动、当日信号 |
+| 研究报告 | LLM 正文、引用/数字门禁、证据表、Markdown 下载 |
+| 信号与组合 | 信号筛选与单条详情、类别预算对照、持仓权重 |
+| 风险与验证 | 硬/软约束明细、六条 `validated=false` 升级门槛 |
+| 成长与决策 | 四维成长分、里程碑、决策日志录入、到期复盘、周期报告 |
+| 数据健康 | 采集失败项、健康检查明细 |
+| 因子与回测 | 中性 IC / q 值、策略指标、PBO 与 CPCV |
+| 运行流水线 | 用同一套 CLI 逐步运行；完整流程含采集与报告 |
+
+默认只监听本机。服务器上的数据和 cron 都在云端，推荐用 SSH 隧道访问，不要把端口暴露到公网：
+
+```bash
+# 服务器（一次性）
+cd /opt/finagent && docker compose build && docker compose --profile web up -d web
+# 本机
+ssh -L 8501:127.0.0.1:8501 ubuntu@<host>
+# 然后打开 http://localhost:8501
+```
+
+网页里的「记录决策」直接写 `data/journal/entries.jsonl`；这是唯一由人填写的一层，系统不会自动生成决策。
+
 ## 部署到腾讯云
 
 每日采集可跑在腾讯云 Lighthouse（4C8G / Ubuntu 22.04）上，Docker + compose，主机 cron 在收盘后触发：
@@ -102,7 +134,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–10 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告、风控与验证门槛、成长状态、决策日志与周期复盘）。cron 十一条：18:30 采集、18:40 因子、18:45 信号、18:47 组合、18:48 风控、18:50 报告、18:55 成长状态、19:05 决策复盘、19:10 健康检查、周日 03:00 备份、周日 03:30 成长周报；报告有 `DEEPSEEK_API_KEY` 时走 LLM，没有或调用失败时写确定性模板并把原因记进 JSON。**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–10 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告、风控与验证门槛、成长状态、决策日志与周期复盘）。cron 十一条：18:30 采集、18:38 健康检查、18:40 因子、18:45 信号、18:47 组合、18:48 风控、18:50 报告、18:55 成长状态、19:05 决策复盘、周日 03:00 备份、周日 03:30 成长周报；健康检查必须排在风控与成长之前，否则它们只能看到昨天的健康结论。报告有 `DEEPSEEK_API_KEY` 时走 LLM，没有或调用失败时写确定性模板并把原因记进 JSON。**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
 
 ## 数据源现状（本机实测，2026-11-05）
 
@@ -143,6 +175,7 @@ finagent/
   macro/      # 增长/通胀/流动性 regime（K1/P1）
   risk/       # 风控硬/软约束、合规词表、validated 升级门槛（Phase 7）
   growth/     # 每日成长状态、决策日志与复盘、周期成长报告（Phase 8–10）
+  web/        # Streamlit 研究台：只读工件 + 调用同一套 CLI 步骤
   portfolio/  # IPS/SAA/TAA/优化/再平衡（K3）
   attribution/# Brinson / 因子归因（K4）
   backtest/   # 回测引擎、成本、CPCV/PBO（Phase 4）

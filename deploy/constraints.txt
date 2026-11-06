@@ -5,3 +5,6 @@
 akshare==1.18.64
 pandas==2.2.*
 numpy==1.26.*
+# The web UI is verified against this Streamlit release; newer versions have
+# changed widget and column-config signatures before.
+streamlit==1.65.0

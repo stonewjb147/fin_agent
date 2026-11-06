@@ -20,3 +20,37 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Optional web UI. Bind to loopback only and reach it through an SSH tunnel:
+  #   ssh -L 8501:127.0.0.1:8501 ubuntu@<host>
+  # Build the image with `docker compose build` first; this service reuses it.
+  web:
+    profiles: ["web"]
+    image: finagent:${FINAGENT_TAG:-0.1.0}
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+      FINAGENT_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs:ro
+    user: "${FINAGENT_UID:-1000}:${FINAGENT_GID:-1000}"
+    working_dir: /app
+    command:
+      - streamlit
+      - run
+      - finagent/web/app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+      - --server.fileWatcherType=none
+      - --browser.gatherUsageStats=false
+    ports:
+      - "127.0.0.1:8501:8501"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -7,6 +7,11 @@ TZ=Asia/Shanghai
 # Collect after the close. A-share data vendors finish updating ~17:00-18:00 CST.
 30 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python scripts/collect_daily.py >> logs/cron.log 2>&1
 
+# Freshness / null-ratio check. It must run after collect and before risk and
+# growth: both read health_<date>.json, and a missing file downgrades the risk
+# check to info instead of failing it. Alerts go to Feishu on errors.
+38 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python scripts/health_check.py --alert feishu >> logs/cron.log 2>&1
+
 # Factor report: reads the cache written above, no network. Writes
 # data/factors/<date>.parquet and data/quality/factor_report_<date>.json.
 40 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli factor-report >> logs/cron.log 2>&1
@@ -34,9 +39,6 @@ TZ=Asia/Shanghai
 55 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli growth >> logs/cron.log 2>&1
 5 19 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli journal --review >> logs/cron.log 2>&1
 30 3 * * 0 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli growth --review --window 30 >> logs/cron.log 2>&1
-
-# Freshness / null-ratio check, with a Feishu alert when it fails.
-10 19 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python scripts/health_check.py --alert feishu >> logs/cron.log 2>&1
 
 # Weekly audit backup: snapshots, quality reports, factor panels and configs.
 # Cache is regenerable and deliberately excluded. Keep 8 weeks.

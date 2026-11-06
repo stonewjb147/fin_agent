@@ -1,7 +1,7 @@
 PYTHON ?= python
 COMPOSE ?= docker compose
 
-.PHONY: help check lint test evals smoke collect docker-build docker-test docker-collect docker-check probe
+.PHONY: help check lint test evals smoke collect web docker-build docker-test docker-collect docker-check probe
 
 help:
 	@echo "make check         - lint + tests + eval smoke (CI gate)"
@@ -9,6 +9,7 @@ help:
 	@echo "make test          - pytest -q (offline)"
 	@echo "make smoke         - validate golden set + metric self-test"
 	@echo "make collect       - fetch today's data (network)"
+	@echo "make web           - start the Streamlit research console"
 	@echo "make docker-build  - build the deployment image"
 	@echo "make docker-test   - run the offline test suite in the image"
 	@echo "make docker-collect- run the daily collector in the image"
@@ -31,6 +32,9 @@ evals:
 
 collect:
 	$(PYTHON) -m finagent.cli collect --start 2022-01-01
+
+web:
+	$(PYTHON) -m streamlit run finagent/web/app.py
 
 probe:
 	$(PYTHON) scripts/probe_sources.py

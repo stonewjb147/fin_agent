@@ -441,6 +441,7 @@ python -m finagent.cli journal --date 2026-11-05 --review       # 到期决策�
 | 时间 | 任务 | 产物 |
 |---|---|---|
 | 周一~五 18:30 | `collect_daily.py` | 缓存 + 质量 + 快照 |
+| 周一~五 18:38 | `health_check.py --alert feishu` | 健康检查 + 告警 |
 | 周一~五 18:40 | `factor-report` | 因子面板 + IC 报告 |
 | 周一~五 18:45 | `signals` | 信号 + 预测账本 |
 | 周一~五 18:47 | `portfolio` | 目标权重 |
@@ -448,11 +449,10 @@ python -m finagent.cli journal --date 2026-11-05 --review       # 到期决策�
 | 周一~五 18:50 | `report` | LLM/模板报告 |
 | 周一~五 18:55 | `growth` | `data/growth/growth_<date>.json` |
 | 周一~五 19:05 | `journal --review` | `data/journal/review_<date>.json` |
-| 周一~五 19:10 | `health_check.py --alert feishu` | 健康检查 + 告警 |
 | 周日 03:00 | `tar` 备份 | `backups/finagent-<date>.tgz` |
 | 周日 03:30 | `growth --review --window 30` | `data/growth/review_<date>.md|json` |
 
-顺序不是随意的：`growth` 必须在 `report` 之后（否则当天报告工件还不存在），`journal --review` 在 `growth` 之后（这样当天复盘结果能进下一次成长状态），备份包含 `data/growth` 与 `data/journal`（后者**不可重建**）。
+顺序不是随意的：健康检查必须排在 `risk` 和 `growth` 之前（两者都读 `health_<date>.json`；文件缺失时风控只会记一条 info，当天的数据错误不会阻断），`growth` 在 `report` 之后（否则当天报告工件还不存在），`journal --review` 在 `growth` 之后（这样当天复盘结果能进下一次成长状态），备份包含 `data/growth` 与 `data/journal`（后者**不可重建**）。
 
 ### 6.3 文件清单
 
