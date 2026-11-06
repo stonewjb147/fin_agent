@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from finagent import config
 from finagent.growth import DecisionJournal
 from finagent.web import data as D
 from finagent.web.runner import build_command, display_command, run_step
@@ -335,7 +336,7 @@ def test_run_step_passes_data_dir_and_combines_output(tmp_path, monkeypatch):
     assert result["ok"] is True
     assert result["output"] == "ok\nwarn"
     assert captured["kwargs"]["env"]["FINAGENT_DATA_DIR"] == str(tmp_path)
-    assert captured["kwargs"]["cwd"].name == "fin_agent_projects"
+    assert Path(captured["kwargs"]["cwd"]) == config.PROJECT_ROOT
 
 
 def test_unknown_step_is_a_key_error():
