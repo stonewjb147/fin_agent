@@ -157,6 +157,15 @@ def bh_qvalues(pvalues: Sequence[float]) -> list[float]:
     return out.tolist()
 
 
+class NoDataError(RuntimeError):
+    """The requested `as_of` has no price data in the cache.
+
+    Raised instead of writing `factors/<as_of>.parquet` from an earlier date:
+    every artefact is named after its as_of, so a stale panel would put a
+    holiday's or a failed collection's date on someone else's numbers.
+    """
+
+
 def run_factor_report(
     universe,
     *,
@@ -176,6 +185,9 @@ def run_factor_report(
     symbols = universe.symbols(as_of)
 
     close = load_close_panel(cache_dir, symbols, as_of)
+    if pd.Timestamp(as_of) not in close.index:
+        latest = close.index.max().date().isoformat() if len(close) else "none"
+        raise NoDataError(f"no price data on {as_of} (panel ends {latest}); run `collect` first")
     factors = factor_snapshot(close, names)
     if factors.empty:
         raise ValueError(f"no factor values could be computed as of {as_of}")

@@ -45,6 +45,22 @@ def test_ic_ignores_nan_pairs_without_producing_inf():
     assert np.isfinite(ic.to_numpy()).all()
 
 
+def test_ranks_use_the_common_support_only():
+    """A symbol with a forward return but no factor must not shift the ranks.
+
+    Regression: ranking each panel over its own support and intersecting
+    afterwards biases the IC. Here the factor is known for A, B, D and the
+    forward return for A, B, C, D. The IC must equal the rank correlation on
+    A, B, D.
+    """
+    index = pd.bdate_range("2024-01-01", periods=1)
+    factor = pd.DataFrame({"A": [1.0], "B": [2.0], "D": [3.0], "C": [np.nan]}, index=index)
+    forward = pd.DataFrame({"A": [0.01], "B": [0.03], "C": [0.02], "D": [0.04]}, index=index)
+
+    ic = cross_sectional_ic(factor, forward, min_symbols=3)
+    assert np.isclose(ic.iloc[0], 1.0)
+
+
 def test_ic_summary_reports_hac_statistics():
     factor, forward = _panel(60)
     summary = ic_summary(cross_sectional_ic(factor, forward), horizon=1)

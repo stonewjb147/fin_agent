@@ -9,7 +9,7 @@ import pytest
 from finagent.data.cache import ParquetCache
 from finagent.data.universe import ETF, Universe
 from finagent.factors import get_factor, load_close_panel
-from finagent.research.report import run_factor_report
+from finagent.research.report import NoDataError, run_factor_report
 
 
 def _synthetic_cache(tmp_path, n_symbols: int = 12, n_days: int = 220, n_future: int = 30) -> tuple:
@@ -144,6 +144,23 @@ def test_report_rejects_an_universe_without_prices(tmp_path):
     universe = Universe(version="u-empty", etfs=etfs)
     with pytest.raises(ValueError):
         run_factor_report(universe, as_of=as_of, cache_dir=cache_dir, write=False)
+
+
+def test_report_refuses_a_date_the_panel_does_not_reach(tmp_path):
+    """A file named <as_of> must never hold an earlier date's numbers."""
+    cache_dir, universe, _, index = _synthetic_cache(tmp_path)
+    stale_as_of = (index[-1] + pd.Timedelta(days=7)).date()  # past the end of the cache
+    out_dir = tmp_path / "factors"
+    with pytest.raises(NoDataError, match="run `collect` first"):
+        run_factor_report(
+            universe,
+            as_of=stale_as_of,
+            cache_dir=cache_dir,
+            out_dir=out_dir,
+            quality_dir=tmp_path / "quality",
+        )
+    assert not any(out_dir.glob("*.parquet"))
+    assert not any((tmp_path / "quality").glob("*.json"))
 
 
 def test_execution_lag_shifts_the_last_usable_date(tmp_path):

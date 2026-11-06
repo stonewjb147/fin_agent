@@ -42,9 +42,19 @@ def cross_sectional_ic(
     min_symbols: int = 8,
     method: str = "spearman",
 ) -> pd.Series:
-    """IC per date. Dates with fewer than `min_symbols` pairs are dropped."""
+    """IC per date. Dates with fewer than `min_symbols` pairs are dropped.
+
+    Ranks are taken over the symbols valid on BOTH sides of that date. Ranking
+    each panel over its own (possibly different) support and intersecting
+    afterwards would rank against different denominators — e.g. a new ETF that
+    has a forward return but not yet enough history for the factor would still
+    shift everyone else's rank.
+    """
     if method not in {"spearman", "pearson"}:
         raise ValueError(f"unknown IC method {method!r}")
+    mask = factor.notna() & forward_returns.reindex_like(factor).notna()
+    factor = factor.where(mask)
+    forward_returns = forward_returns.reindex_like(factor).where(mask)
     if method == "spearman":
         factor = factor.rank(axis=1)
         forward_returns = forward_returns.rank(axis=1)

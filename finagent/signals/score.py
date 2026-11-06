@@ -17,6 +17,15 @@ from finagent.factors import DEFAULT_FACTORS, get_factor
 DEFAULT_WEIGHTS: dict[str, float] = {name: 1.0 for name in DEFAULT_FACTORS}
 
 
+class NoScoresError(RuntimeError):
+    """Raised when the requested date has no scoreable cross-section.
+
+    Separate from ValueError so the CLI can turn it into a one-line message
+    instead of a traceback: a missing date is an operational condition (data
+    not collected yet, holiday, ETF too young), not a programming error.
+    """
+
+
 def composite_scores(
     factors: pd.DataFrame,
     weights: Mapping[str, float] | None = None,
@@ -93,10 +102,10 @@ def composite_scores(
 def score_row(scores: pd.DataFrame, as_of) -> pd.DataFrame:
     """The cross-section for one date, indexed by symbol."""
     if scores.empty:
-        raise ValueError("no composite scores available")
+        raise NoScoresError("no composite scores available")
     day = pd.Timestamp(as_of)
     row = scores[scores["date"] == day]
     if row.empty:
         latest = pd.Timestamp(scores["date"].max()).date()
-        raise ValueError(f"no composite scores on {pd.Timestamp(as_of).date()}; latest is {latest}")
+        raise NoScoresError(f"no composite scores on {pd.Timestamp(as_of).date()}; latest is {latest}")
     return row.set_index("symbol").sort_index()

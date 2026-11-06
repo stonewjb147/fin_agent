@@ -6,12 +6,14 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
+
 from finagent import config
 from finagent.data.panel import as_date
 from finagent.factors import DEFAULT_FACTORS, load_close_panel
 from finagent.portfolio.construct import build_portfolio
 from finagent.portfolio.policy import PortfolioPolicy, load_policy
-from finagent.research.report import MIN_SYMBOLS, factor_snapshot
+from finagent.research.report import MIN_SYMBOLS, NoDataError, factor_snapshot
 from finagent.signals.score import composite_scores
 
 
@@ -30,6 +32,9 @@ def run_portfolio(
     policy = policy or load_policy()
 
     close = load_close_panel(cache_dir, universe.symbols(as_of), as_of)
+    if pd.Timestamp(as_of) not in close.index:
+        latest = close.index.max().date().isoformat() if len(close) else "none"
+        raise NoDataError(f"no price data on {as_of} (panel ends {latest}); run `collect` first")
     factors = factor_snapshot(close, list(factor_names or DEFAULT_FACTORS), min_obs=MIN_SYMBOLS)
     scores = composite_scores(factors)
     result = build_portfolio(close, universe, as_of, scores, policy)

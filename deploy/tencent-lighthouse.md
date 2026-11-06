@@ -157,7 +157,7 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest -q          # 123 passed
+docker compose run --rm app python -m pytest -q          # 130 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
@@ -323,6 +323,7 @@ docker tag finagent:0.1.0 finagent:$(git rev-parse --short HEAD)
 | `date` 显示 UTC | 主机时区没设，`timedatectl set-timezone Asia/Shanghai`；容器再看 compose 的 `TZ` |
 | cron 没有任何输出 | `journalctl -u cron -n 50`；确认 PATH 与 `/usr/bin/docker` 路径 |
 | 采集 exit 1 | `logs/cron.log` 里看 `failures`；coverage 缺口不算 error，error 才是问题 |
+| `factor-report` / `signals` / `portfolio` exit 1 且提示 `panel ends ...; run collect first` | 18:30 的采集没成功（或还没跑完），当天缓存里没有数据。命令拒绝用前一天的数据生成标着今天的文件，先补跑采集即可 |
 | 飞书没收到 | `.env` 的 app id/secret/chat id；先跑第 7 节的 `send_text` 测试 |
 | 数据源全部超时 | `source_probe.json`；确认没有遗留 `HTTP_PROXY` 环境变量；必要时换地域 |
 | 构建 OOM | 4C8G 基本不会；`free -h` 确认，若降配过就补 swap |

@@ -11,7 +11,7 @@ from finagent import config
 from finagent.data.panel import as_date
 from finagent.factors import get_factor
 from finagent.signals.models import Evidence, InvalidationRule, QuantSignal
-from finagent.signals.score import DEFAULT_WEIGHTS
+from finagent.signals.score import DEFAULT_WEIGHTS, NoScoresError
 
 # Below these thresholds a ranking is too weak to write down as a view.
 MIN_COMPOSITE = 0.25
@@ -121,7 +121,7 @@ def build_signals(
     meta = universe.by_symbol()
     row = scores[scores["date"] == day]
     if row.empty:
-        raise ValueError(f"no composite scores on {as_of}")
+        raise NoScoresError(f"no composite scores on {as_of}")
     row = row.set_index("symbol")
 
     def _make(symbol: str, direction: int) -> QuantSignal:

@@ -109,3 +109,41 @@ def test_portfolio_vol_matches_manual_calculation():
     cov = pd.DataFrame([[0.04, 0.0], [0.0, 0.09]], index=["A", "B"], columns=["A", "B"])
     expected = np.sqrt(0.25 * 0.04 + 0.25 * 0.09)
     assert pytest.approx(portfolio_vol(weights, cov)) == expected
+
+
+def test_portfolio_refuses_a_date_the_panel_does_not_reach(tmp_path):
+    """Weights dated <as_of> must not be built from an earlier day's prices."""
+    from datetime import date
+
+    from finagent.data.universe import ETF, Universe
+    from finagent.portfolio.pipeline import run_portfolio
+    from finagent.research.report import NoDataError
+
+    cache = tmp_path / "cache" / "etf_daily_hfq"
+    cache.mkdir(parents=True)
+    days = pd.bdate_range("2026-10-26", periods=5)
+    for j in range(3):
+        symbol = f"51030{j}"
+        pd.DataFrame(
+            {
+                "date": days,
+                "symbol": symbol,
+                "close": 100.0 + j + np.arange(len(days)),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "volume": 1_000_000,
+                "amount": 2e8,
+            }
+        ).to_parquet(cache / f"{symbol}.parquet", index=False)
+    universe = Universe(
+        version="u-test",
+        etfs=[ETF(symbol=f"51030{j}", name=f"E{j}", category="broad") for j in range(3)],
+    )
+
+    out_dir = tmp_path / "portfolio"
+    with pytest.raises(NoDataError, match="run `collect` first"):
+        run_portfolio(
+            universe, as_of=date(2026, 11, 6), cache_dir=tmp_path / "cache", out_dir=out_dir
+        )
+    assert not any(out_dir.glob("*.json"))

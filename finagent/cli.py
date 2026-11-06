@@ -25,12 +25,30 @@ from finagent.portfolio.construct import format_portfolio
 from finagent.portfolio.pipeline import run_portfolio
 from finagent.predictions.ledger import PredictionLedger
 from finagent.predictions.ledger import format_summary as format_ledger
-from finagent.research.report import format_summary, run_factor_report
+from finagent.research.report import NoDataError, format_summary, run_factor_report
 from finagent.signals.pipeline import format_signals, run_signal_pipeline
+from finagent.signals.score import NoScoresError
 
 
 def _parse_date(value: str) -> date:
     return date.fromisoformat(value)
+
+
+def _resolve_as_of(provider, value: str | None) -> date:
+    """The requested date, snapped back to the last trading day at or before it.
+
+    Every downstream artefact is named after its as_of, so a request for a
+    Saturday must not silently produce a file labelled with that Saturday while
+    holding Friday's data (nor crash); we snap and say so on stderr.
+    """
+    if not value:
+        return provider.last_trading_day()
+    requested = _parse_date(value)
+    if provider.is_trading_day(requested):
+        return requested
+    fallback = provider.last_trading_day(requested)
+    print(f"{requested} is not a trading day; using {fallback}", file=sys.stderr)
+    return fallback
 
 
 def _universe(path: str | None):
@@ -87,7 +105,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
 def cmd_data_check(args: argparse.Namespace) -> int:
     universe = _universe(args.universe)
     provider = default_provider()
-    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    as_of = _resolve_as_of(provider, args.date)
     report = check_health(provider, provider.cache, universe, as_of)
 
     print(f"Data check for {report['as_of']} (last trading day {report['last_trading_day']})")
@@ -127,16 +145,20 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 def cmd_factor_report(args: argparse.Namespace) -> int:
     universe = _universe(args.universe)
     provider = default_provider()
-    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    as_of = _resolve_as_of(provider, args.date)
     horizons = [int(h) for h in args.horizons.split(",") if h.strip()]
 
-    report = run_factor_report(
-        universe,
-        as_of=as_of,
-        factor_names=args.factors.split(",") if args.factors else None,
-        horizons=horizons,
-        execution_lag=args.execution_lag,
-    )
+    try:
+        report = run_factor_report(
+            universe,
+            as_of=as_of,
+            factor_names=args.factors.split(",") if args.factors else None,
+            horizons=horizons,
+            execution_lag=args.execution_lag,
+        )
+    except NoDataError as exc:
+        print(f"factor-report: {exc}", file=sys.stderr)
+        return 1
     print(format_summary(report))
     print(f"\nFactors : {report['factor_file']}")
     print(f"Report  : {report['report_file']}")
@@ -146,17 +168,22 @@ def cmd_factor_report(args: argparse.Namespace) -> int:
 def cmd_signals(args: argparse.Namespace) -> int:
     universe = _universe(args.universe)
     provider = default_provider()
-    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
-    result = run_signal_pipeline(
-        universe,
-        as_of=as_of,
-        horizon=args.horizon,
-        n_long=args.n_long,
-        n_short=args.n_short,
-        min_composite=args.min_composite,
-        min_confidence=args.min_confidence,
-        execution_lag=args.execution_lag,
-    )
+    as_of = _resolve_as_of(provider, args.date)
+    try:
+        result = run_signal_pipeline(
+            universe,
+            as_of=as_of,
+            horizon=args.horizon,
+            n_long=args.n_long,
+            n_short=args.n_short,
+            min_composite=args.min_composite,
+            min_confidence=args.min_confidence,
+            execution_lag=args.execution_lag,
+        )
+    except NoScoresError as exc:
+        print(f"signals: {exc}", file=sys.stderr)
+        print("Run `collect` first, or pass --date with a date that has price data.", file=sys.stderr)
+        return 1
     print(format_signals(result))
     if result.get("signal_file"):
         print(f"\nSignals : {result['signal_file']}")
@@ -167,8 +194,12 @@ def cmd_signals(args: argparse.Namespace) -> int:
 def cmd_portfolio(args: argparse.Namespace) -> int:
     universe = _universe(args.universe)
     provider = default_provider()
-    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
-    result = run_portfolio(universe, as_of=as_of)
+    as_of = _resolve_as_of(provider, args.date)
+    try:
+        result = run_portfolio(universe, as_of=as_of)
+    except (NoDataError, NoScoresError) as exc:
+        print(f"portfolio: {exc}", file=sys.stderr)
+        return 1
     print(format_portfolio(result))
     print(f"\nPortfolio : {result.get('portfolio_file')}")
     return 0
@@ -177,7 +208,7 @@ def cmd_portfolio(args: argparse.Namespace) -> int:
 def cmd_ledger(args: argparse.Namespace) -> int:
     universe = _universe(args.universe)
     provider = default_provider()
-    as_of = _parse_date(args.date) if args.date else provider.last_trading_day()
+    as_of = _resolve_as_of(provider, args.date)
     ledger = PredictionLedger()
 
     if args.settle:
