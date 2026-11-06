@@ -158,13 +158,13 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest             # 254 passed
+docker compose run --rm app python -m pytest             # 266 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
 构建失败先看内存：`free -h`；4C8G 一般不会 OOM，若曾降配到 2C2G 再补 swap。
 
-> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`254 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
+> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`266 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
 
 ---
 
