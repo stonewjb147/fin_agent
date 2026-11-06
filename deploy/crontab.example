@@ -27,9 +27,17 @@ TZ=Asia/Shanghai
 # written and the JSON records why it fell back.
 50 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli report >> logs/cron.log 2>&1
 
+# Phase 8-10 growth loop. Daily state reads the artefacts above and writes
+# data/growth/growth_<date>.json. Journal review settles matured human
+# decisions; it never creates one. The weekly review writes
+# data/growth/review_<date>.md|json with lessons and next actions.
+55 18 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli growth >> logs/cron.log 2>&1
+5 19 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli journal --review >> logs/cron.log 2>&1
+30 3 * * 0 cd /opt/finagent && /usr/bin/docker compose run --rm app python -m finagent.cli growth --review --window 30 >> logs/cron.log 2>&1
+
 # Freshness / null-ratio check, with a Feishu alert when it fails.
 10 19 * * 1-5 cd /opt/finagent && /usr/bin/docker compose run --rm app python scripts/health_check.py --alert feishu >> logs/cron.log 2>&1
 
 # Weekly audit backup: snapshots, quality reports, factor panels and configs.
 # Cache is regenerable and deliberately excluded. Keep 8 weeks.
-0 3 * * 0 cd /opt/finagent && tar czf backups/finagent-$(date +\%F).tgz data/snapshots data/quality data/factors data/signals data/predictions data/portfolio data/reports configs && find backups -type f -name 'finagent-*.tgz' -mtime +56 -delete
+0 3 * * 0 cd /opt/finagent && tar czf backups/finagent-$(date +\%F).tgz data/snapshots data/quality data/factors data/signals data/predictions data/portfolio data/reports data/growth data/journal configs && find backups -type f -name 'finagent-*.tgz' -mtime +56 -delete

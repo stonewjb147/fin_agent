@@ -34,6 +34,8 @@ data/signals/
 data/predictions/
 data/reports/
 data/portfolio/
+data/growth/
+data/journal/
 logs/
 backups/
 .DS_Store

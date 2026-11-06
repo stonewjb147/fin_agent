@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）、Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测）、Phase 5（资金流 / 份额 / 折溢价状态 + 有界新闻叠加）、Phase 6（证据约束的 LLM 报告 + 确定性回退）与 Phase 7（风控硬/软约束 + `validated=false` 升级门槛）。**回测、评测与 `flows` 是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU；行业资金流历史由 18:30 采集顺带累积（每天一个快照）。服务器上暂不放 `data/news/`，新闻叠加自动跳过并在信号 JSON 的 `overlays.news` 里标注原因。
+目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）、Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测）、Phase 5（资金流 / 份额 / 折溢价状态 + 有界新闻叠加）、Phase 6（证据约束的 LLM 报告 + 确定性回退）、Phase 7（风控硬/软约束 + `validated=false` 升级门槛）与 Phase 8–10（成长状态、决策日志、周期成长报告）。**回测、评测与 `flows` 是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU；行业资金流历史由 18:30 采集顺带累积（每天一个快照）。服务器上暂不放 `data/news/`，新闻叠加自动跳过并在信号 JSON 的 `overlays.news` 里标注原因。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -158,13 +158,13 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest             # 238 passed
+docker compose run --rm app python -m pytest             # 254 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
 构建失败先看内存：`free -h`；4C8G 一般不会 OOM，若曾降配到 2C2G 再补 swap。
 
-> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`238 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
+> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`254 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
 
 ---
 
@@ -229,6 +229,14 @@ docker compose run --rm app python -m finagent.cli report --date 2026-11-05
 # 没有 key：Mode template + Fallback: DEEPSEEK_API_KEY not configured；JSON 里 fallback_reason 说明原因
 # key 只在请求头，不进镜像/日志/报告；复制到过期 key 会 HTTP 401 并回退模板
 
+docker compose run --rm app python -m finagent.cli growth --date 2026-11-05
+# 实测：level=L2 证据积累期 / score=62/100 / Process 100 / Evidence 0 / Risk 70 / Data 100
+# 产出 data/growth/growth_2026-11-05.json
+docker compose run --rm app python -m finagent.cli growth --date 2026-11-05 --review
+# 产出 data/growth/review_2026-11-05.md|json（一页结论、证据门槛、决策、风险、行动、学习卡）
+docker compose run --rm app python -m finagent.cli journal --date 2026-11-05
+# 没有人工记录时显示 entries=0；journal 只接受人写入，不生成决策
+
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
 # 回测不进 cron：它是研究工具，数据变了重新跑一次即可
@@ -252,7 +260,7 @@ docker compose run --rm app python -c \
 ```bash
 cd /opt/finagent
 crontab deploy/crontab.example       # 以当前部署用户安装
-crontab -l                            # 确认八条任务（含 18:47 组合、18:48 风控、18:50 报告）
+crontab -l                            # 确认十一条任务（含 18:50 报告、18:55 成长、19:05 决策复盘、周日 03:30 周报）
 ```
 
 - 18:30 周一~五：`collect_daily.py`
@@ -261,8 +269,11 @@ crontab -l                            # 确认八条任务（含 18:47 组合、
 - 18:47 周一~五：`portfolio`（目标权重，只读缓存）
 - 18:48 周一~五：`risk`（硬/软约束，写 `data/quality/risk_<date>.json`）
 - 19:10 周一~五：`health_check.py --alert feishu`
-- 周日 03:00：备份 snapshots/quality/factors/signals/predictions/portfolio/reports/configs，保留 8 周
 - 18:50 周一~五：`report`（有 `DEEPSEEK_API_KEY` 走 LLM，没有或调用失败写确定性模板，`fallback_reason` 记录原因）
+- 18:55 周一~五：`growth`（成长状态；写 `data/growth/growth_<date>.json`）
+- 19:05 周一~五：`journal --review`（到期的人工决策按价格复盘；没有记录时只打印空摘要）
+- 周日 03:00：备份 snapshots/quality/factors/signals/predictions/portfolio/reports/growth/journal/configs，保留 8 周
+- 周日 03:30：`growth --review --window 30`（写 `data/growth/review_<date>.md|json`）
 
 **先手动演练一次**（不用等到明天）：
 
@@ -368,9 +379,9 @@ docker tag finagent:0.1.0 finagent:$(git rev-parse --short HEAD)
 
 ## 13. 备份与恢复
 
-备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality data/factors data/signals data/predictions data/portfolio data/reports configs` 到 `backups/`，保留 56 天。
+备份已在 cron 里：每周日 03:00 打包 `data/snapshots data/quality data/factors data/signals data/predictions data/portfolio data/reports data/growth data/journal configs` 到 `backups/`，保留 56 天。
 
-- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康/因子报告）、`data/factors`（因子面板）、`data/predictions`（预测账本，**不可重建**，丢了就再也没有当时的口径）、`data/signals`、`data/portfolio`、`data/reports`（报告正文与门禁结果）、`configs`、`.env`（单独保管）。
+- **必须备份**：`data/snapshots`（血缘）、`data/quality`（质量/健康/因子报告）、`data/factors`（因子面板）、`data/predictions`（预测账本，**不可重建**，丢了就再也没有当时的口径）、`data/signals`、`data/portfolio`、`data/reports`（报告正文与门禁结果）、`data/growth`（成长状态与周报）、`data/journal`（**人工决策记录，不可重建**）、`configs`、`.env`（单独保管）。
 - **不必备份**：`data/cache` 可由源重建；`faiss_index` 不在本次部署。
 - 需要异地容灾时，把 `backups/` 同步到腾讯云 COS（`coscmd upload -r backups/ /finagent-backups/`）。
 

@@ -16,8 +16,8 @@
 | Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) 与[学习笔记](docs/phase1_4_notes.md) |
 | Phase 5 资金流 + 新闻叠加（缺源降级、有界可解释） | 完成，数据受限，见 [`docs/phase5_flows_news.md`](docs/phase5_flows_news.md)（§5 学习笔记） |
 | Phase 6 LLM 报告与评测（证据表 / 引用与数字门禁 / 确定性回退） | 完成，见 [`docs/phase6_llm_report.md`](docs/phase6_llm_report.md) 与[使用手册](docs/phase6_manual.md) |
-| Phase 7 风控合规（硬/软约束、合规词表、`validated=false` 升级门槛） | 完成，见 [`docs/phase7_risk_compliance.md`](docs/phase7_risk_compliance.md) |
-| Phase 8~10 成长闭环 | 计划中 |
+| Phase 7 风控合规（硬/软约束、合规词表、`validated=false` 升级门槛） | 完成，见 [`docs/phase7_risk_compliance.md`](docs/phase7_risk_compliance.md) 与[学习手册](docs/phase7_manual.md) |
+| Phase 8~10 成长闭环（每日成长状态 / 决策日志与复盘 / 周期成长报告） | 完成，见 [`docs/phase8_10_growth.md`](docs/phase8_10_growth.md) |
 
 ## 安装
 
@@ -64,6 +64,14 @@ python -m finagent.cli portfolio --date 2026-11-05
 python -m finagent.cli risk --date 2026-11-05
 python -m finagent.cli risk --date 2026-11-05 --json
 
+# Phase 8~10：成长闭环（过程分 / 证据进度 / 决策日志 / 周期复盘）
+python -m finagent.cli growth --date 2026-11-05                 # 每日成长状态 JSON
+python -m finagent.cli growth --date 2026-11-05 --review        # 周期成长报告 md + json
+python -m finagent.cli journal --date 2026-11-05                # 查看决策日志
+python -m finagent.cli journal --date 2026-11-05 --add --symbol 510300 \
+  --action watch --rationale "等回撤再评估" --confidence 0.6      # 人工记录决策
+python -m finagent.cli journal --date 2026-11-05 --review       # 到期决策按价格复盘
+
 # 预测账本：结算到期预测并输出命中率 / 校准
 python -m finagent.cli ledger --date 2026-11-05 --settle
 
@@ -94,7 +102,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–7 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告、风控与验证门槛）。cron 八条：18:30 采集、18:40 因子、18:45 信号、18:47 组合、18:48 风控、18:50 报告、19:10 健康检查、周日 03:00 备份；报告有 `DEEPSEEK_API_KEY` 时走 LLM，没有或调用失败时写确定性模板并把原因记进 JSON。**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–10 代码（采集、健康检查、因子报告、信号与预测账本、回测与评测、资金流/新闻叠加、证据约束的 LLM 报告、风控与验证门槛、成长状态、决策日志与周期复盘）。cron 十一条：18:30 采集、18:40 因子、18:45 信号、18:47 组合、18:48 风控、18:50 报告、18:55 成长状态、19:05 决策复盘、19:10 健康检查、周日 03:00 备份、周日 03:30 成长周报；报告有 `DEEPSEEK_API_KEY` 时走 LLM，没有或调用失败时写确定性模板并把原因记进 JSON。**回测、`phase_eval.py` 与 `flows` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息；行业资金流历史由 18:30 采集顺带累积）。服务器上目前没有 `data/news/` 文件，新闻叠加会自动跳过并在信号 JSON 里标注。
 
 ## 数据源现状（本机实测，2026-11-05）
 
@@ -122,6 +130,8 @@ docker compose run --rm app python scripts/health_check.py --alert feishu
 12. 报告口径：LLM 只能使用证据表里的数字，引用写成 `[snap:<证据ID>]`；生成后必须通过五段结构、必须词组、禁用词、引用准确率和**严格数字可追溯**（每个数字都必须是某个证据值按所写小数位四舍五入的结果，多写一位精度也算失败）。不通过先重试一次，仍失败就回退到确定性模板；没有 `DEEPSEEK_API_KEY` 同样回退。`report_<date>.json` 记录 `mode / model / attempts / fallback_reason / prompt_sha256 / checks`，正文在 `.md`。报告不改变任何信号，`validated=false` 保持不变。
 13. 风控口径：`risk` 独立复算持仓约束，不信任组合文件的声明。**hard** 越线阻断报告（负权重、权重和≠1、单标的>12%、类别暴露越上限、组合波动>18%、回测回撤>20%、持仓缺价格、60日日均成交额<5000万、健康检查 error），**soft** 只警告（top5>40%、有效标的<3、平均相关>60%、类别偏离预算>3pp、健康检查 warning、数据落后），**info** 不影响状态（结算样本进度等）。`blocked` 时报告必须出现「风控阻断」，否则门禁不通过。合规词表只在 `finagent/risk/compliance.py` 定义。`validated=false` 的六条升级条件（结算 385 条、命中率≥55%、平均方向超额>0、显著因子≥1、回撤≤20%、风控不阻断）全部通过才 `eligible=true`，但仍需人工决定，不会自动改旗标。
 
+14. 成长口径：成长分 = 流程 30% + 证据 30% + 风控 25% + 数据 15%，只衡量研究过程，不衡量收益。流程分看当日 7 个工件是否齐全；证据分看账本已结算条数 / 385；风控分 `pass=100 / warn=70 / blocked=0`；数据分由健康检查 errors/warnings 扣减。等级 L0–L4，只用于提示下一步，不是绩效评级。决策日志只由人写入，`watch / no_trade` 记为观察项，不计入命中率；到期复盘只做价格对照，不替人评价决策好坏。任何自动任务都不会修改 `validated=false`。
+
 ## 目录
 
 ```
@@ -132,6 +142,7 @@ finagent/
   valuation/  # 指数估值、ERP、Gordon 合理 PE（K1）
   macro/      # 增长/通胀/流动性 regime（K1/P1）
   risk/       # 风控硬/软约束、合规词表、validated 升级门槛（Phase 7）
+  growth/     # 每日成长状态、决策日志与复盘、周期成长报告（Phase 8–10）
   portfolio/  # IPS/SAA/TAA/优化/再平衡（K3）
   attribution/# Brinson / 因子归因（K4）
   backtest/   # 回测引擎、成本、CPCV/PBO（Phase 4）
@@ -142,7 +153,7 @@ finagent/
   agent/      # 证据表、DeepSeek 客户端、提示词、确定性模板、报告门禁（Phase 6）
   evals/      # golden set、引用/数字可追溯/格式指标
 configs/      # universe / catalog / 后续 factors、ips、holdings
-docs/         # 评测报告、Phase 6 使用手册（phase6_manual.md）与学习笔记
+docs/         # 评测报告、Phase 6 使用手册、Phase 7 学习手册、Phase 8–10 成长报告
 tests/        # 全部离线，不联网
 scripts/      # 每日采集、健康检查、源探测、Phase 1-4 评测
 ```

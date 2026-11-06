@@ -24,6 +24,8 @@ PREDICTION_DIR = DATA_DIR / "predictions"
 REPORT_DIR = DATA_DIR / "reports"
 PORTFOLIO_DIR = DATA_DIR / "portfolio"
 NEWS_DIR = DATA_DIR / "news"
+GROWTH_DIR = DATA_DIR / "growth"
+JOURNAL_DIR = DATA_DIR / "journal"
 CONFIG_DIR = PROJECT_ROOT / "configs"
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
 
@@ -78,6 +80,8 @@ def ensure_dirs() -> None:
         REPORT_DIR,
         PORTFOLIO_DIR,
         NEWS_DIR,
+        GROWTH_DIR,
+        JOURNAL_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)
 

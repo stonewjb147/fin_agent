@@ -26,6 +26,18 @@ from finagent.data.lineage import SnapshotStore
 from finagent.data.universe import load_universe
 from finagent.factors import load_close_panel
 from finagent.flows import build_flows_report, format_flows
+from finagent.growth import (
+    ACTION_DIRECTION,
+    DecisionJournal,
+    JournalError,
+    format_growth,
+    format_growth_review,
+    format_journal,
+    format_journal_review,
+    run_growth,
+    run_growth_review,
+    run_journal_review,
+)
 from finagent.portfolio.construct import format_portfolio
 from finagent.portfolio.pipeline import run_portfolio
 from finagent.predictions.ledger import PredictionLedger
@@ -335,6 +347,82 @@ def cmd_risk(args: argparse.Namespace) -> int:
     return 1 if result["status"] == "blocked" else 0
 
 
+def cmd_growth(args: argparse.Namespace) -> int:
+    try:
+        as_of = args.date or _latest_signal_date()
+    except EvidenceError as exc:
+        print(f"growth: {exc}", file=sys.stderr)
+        return 1
+    out_dir = Path(args.out) if args.out else None
+    if args.review:
+        result = run_growth_review(as_of, out_dir=out_dir, window=args.window)
+        print(format_growth_review(result))
+    else:
+        result = run_growth(as_of, out_dir=out_dir, window=args.window)
+        print(format_growth(result))
+    if args.json:
+        payload = {key: value for key, value in result.items() if key != "markdown"}
+        print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def cmd_journal(args: argparse.Namespace) -> int:
+    if args.add and args.review:
+        print("journal: --add and --review are mutually exclusive", file=sys.stderr)
+        return 2
+    journal = DecisionJournal(Path(args.out) if args.out else None)
+    if args.add:
+        if not args.action or not args.rationale:
+            print("journal: --add requires --action and --rationale", file=sys.stderr)
+            return 2
+        try:
+            record = journal.add(
+                as_of=args.date or date.today().isoformat(),
+                action=args.action,
+                rationale=args.rationale,
+                symbol=args.symbol,
+                confidence=args.confidence,
+                review_days=args.review_days,
+                tags=[tag.strip() for tag in (args.tags or "").split(",") if tag.strip()],
+                signal_ids=[
+                    item.strip()
+                    for item in (args.signal_ids or "").split(",")
+                    if item.strip()
+                ],
+                decision_id=args.decision_id,
+            )
+        except JournalError as exc:
+            print(f"journal: {exc}", file=sys.stderr)
+            return 1
+        print(f"Recorded {record['decision_id']}")
+        print(f"  date={record['as_of']}  scope={record['scope']}  action={record['action']}")
+        print(f"  confidence={record['confidence']}  review_days={record['review_days']}")
+        print(f"  rationale={record['rationale']}")
+        print(f"  file={journal.entries_path}")
+        return 0
+
+    try:
+        as_of = args.date or _latest_signal_date()
+    except EvidenceError as exc:
+        print(f"journal: {exc}", file=sys.stderr)
+        return 1
+    if args.review:
+        universe = _universe(args.universe)
+        result = run_journal_review(
+            as_of,
+            universe_symbols=universe.symbols(_parse_date(as_of)),
+            out_dir=Path(args.out) if args.out else None,
+        )
+        print(format_journal_review(result))
+    else:
+        summary = journal.summary(as_of)
+        print(format_journal(summary))
+        result = summary
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
 def _planned(phase: str):
     def run(_: argparse.Namespace) -> int:
         print(f"This command belongs to {phase} and is not implemented yet.", file=sys.stderr)
@@ -459,6 +547,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=None, help="output directory (default: data/quality)")
     p.add_argument("--json", action="store_true", help="also print the full JSON payload")
     p.set_defaults(func=cmd_risk)
+
+    p = sub.add_parser("growth", help="Phase 8-10 daily growth state or periodic review")
+    p.add_argument("--date", default=None, help="defaults to the latest signal file")
+    p.add_argument("--review", action="store_true", help="write a periodic growth review")
+    p.add_argument("--window", type=int, default=30, help="trading sessions in the activity window")
+    p.add_argument("--out", default=None, help="output directory (default: data/growth)")
+    p.add_argument("--json", action="store_true", help="also print the full JSON payload")
+    p.set_defaults(func=cmd_growth)
+
+    p = sub.add_parser("journal", help="Phase 9 decision journal: add, list or review decisions")
+    p.add_argument("--date", default=None, help="decision date or review date")
+    p.add_argument("--add", action="store_true", help="append a decision")
+    p.add_argument("--action", choices=sorted(ACTION_DIRECTION), default=None)
+    p.add_argument("--symbol", default=None, help="ETF code; omit for a portfolio-level decision")
+    p.add_argument("--rationale", default=None, help="why this decision was made (required)")
+    p.add_argument("--confidence", type=float, default=0.5, help="0 to 1; a judgment score")
+    p.add_argument("--review-days", type=int, default=20, help="trading days before outcome review")
+    p.add_argument("--tags", default="", help="comma separated")
+    p.add_argument("--signal-ids", default="", help="comma separated signal ids this decision used")
+    p.add_argument("--id", dest="decision_id", default=None, help="optional stable decision id")
+    p.add_argument("--review", action="store_true", help="settle matured decisions against prices")
+    p.add_argument("--universe", default=None)
+    p.add_argument("--out", default=None, help="output directory (default: data/journal)")
+    p.add_argument("--json", action="store_true", help="also print the full JSON payload")
+    p.set_defaults(func=cmd_journal)
 
     for name, phase, help_text in (
         ("valuation", "Phase K1", "index valuation dashboard"),
