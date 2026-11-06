@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、检查新鲜度，失败时飞书告警。只部署 Phase 1（采集 + 健康检查），不含因子、回测、LLM。
+目标：每天收盘后自动采集数据、产出因子报告、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）与 Phase 2（因子面板 + IC 报告），不含组合、回测与 LLM。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -157,7 +157,7 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest -q          # 52 passed
+docker compose run --rm app python -m pytest -q          # 90 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
@@ -183,7 +183,8 @@ docker compose run --rm app python scripts/probe_sources.py \
 ```bash
 docker compose run --rm app python -m finagent.cli collect \
   --start 2022-01-01 --snapshots on
-# 预期：Datasets written: 68，Failures: 2（index_valuation/399006、etf_scale_sse）
+# 预期：Datasets written: 111，Failures: 3（index_valuation/399006、index_valuation/399330、etf_scale_sse）
+# 这三项是已登记的数据缺口，不是 bug
 # 记下输出的 Snapshot: snap-YYYYMMDD-xxxxxxxx
 
 docker compose run --rm app python -m finagent.cli data-check
@@ -193,7 +194,7 @@ docker compose run --rm app python -m finagent.cli snapshot --id <上一步的 s
 # 预期：checksum verification: OK
 
 docker compose run --rm app python -m finagent.cli factor-report --date 2026-11-05
-# 预期：3 个因子 × 3 个持有期的 IC/ICIR/t/q 表格，30 秒内跑完
+# 实测：3 个因子 × 3 个持有期的 IC/ICIR/t/q 表格，17 秒跑完（无网络）
 ```
 
 验证飞书（这一步会真的发一条消息）：

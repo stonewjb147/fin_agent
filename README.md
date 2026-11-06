@@ -58,7 +58,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。本次只部署 Phase 1，不含因子、回测与 LLM。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1（采集 + 健康检查）与 Phase 2（因子面板 + IC 报告），不含组合、回测与 LLM。cron 四条：18:30 采集、18:40 因子、19:10 健康检查、周日 03:00 备份。
 
 ## 数据源现状（本机实测，2026-11-05）
 
