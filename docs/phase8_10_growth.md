@@ -13,7 +13,7 @@
 | 本机实测 | `L2 证据积累期 62/100`：流程 100（7/7 工件）、证据 0（0/385 结算）、风控 70（`warn`）、数据 100 |
 | 周期报告 | `data/growth/review_2026-11-05.md|json`，六条验证门槛中 2 条通过（回撤、风控不阻断），4 条未通过 |
 | 新增测试 | 16 条，全量 254 passed；`ruff` 干净 |
-| 云端 | 见 §7（部署后补实测输出） |
+| 云端 | 已部署 `4c63425`：容器内 254 passed、growth L2 62/100、risk `warn`、report Gate PASS |
 
 一句话：**成长体系不回答「明天买什么」，它回答「这周你有没有把该做的做完、把做过的记下来、把记下的回头看」。**
 
@@ -470,7 +470,27 @@ tests/test_growth.py   # 16 条离线测试
 
 ## 7. 云端部署与验证
 
-（部署后补：镜像、测试数、growth 输出、report/risk 复验、crontab 条数。）
+代码部署到腾讯云 Lighthouse 的 Docker 容器（`/opt/finagent`，compose 服务 `app`）。镜像在构建时把代码复制进去，所以每次发版都要重建镜像，而不是只 `git pull`。
+
+| 步骤 | 结果 |
+|---|---|
+| 部署提交 | `4c63425 feat: Phase 8-10 成长闭环` |
+| 镜像 | 重新构建成功，打标签 `finagent:4c63425`（与 `finagent:0.1.0` 同一个 image id） |
+| 容器内测试 | **254 passed in 63.97s** |
+| 每日成长状态 | `L2 62/100`、`7/7`、`0/385`、`warn`，与本地逐字一致 |
+| 周期成长报告 | 写出 `growth_2026-11-05.json`、`review_2026-11-05.json`、`review_2026-11-05.md` |
+| 决策日志 | `entries=0 reviewed=0 pending=0`；`journal --review` 正常处理空日志并写 `review_2026-11-05.json` |
+| 风控复验 | `status=warn`，`risk-v1 (0a8b6aaace1c)`，hard 15/15、soft 10/11，`n_eff=2.64` |
+| 报告复验 | `Mode llm (deepseek-chat, 1 attempt)`、`Gate PASS`、引用 95/95、数字 91 项 0 不可追溯 |
+| crontab | 11 条任务（8 条 `finagent.cli` + 采集 + 健康检查 + 备份），含 18:55 growth、19:05 journal --review、周日 03:30 growth --review |
+
+云端 `review_<date>.md` 的六条门槛与本地完全相同：`drawdown_budget` ✅、`risk_not_blocked` ✅，其余四条 ❌，`eligible=false`、`validated=false`。
+
+**从这次部署学到的事**：
+
+- 容器里的代码是镜像的一部分，`git pull` 不会改变正在运行的镜像；部署必须「更新仓库 → 重建镜像 → 用新镜像跑测试」；
+- 空决策日志的复盘路径也要验证：它不能报错，也不能写出一条假记录；
+- 云端和本地输出逐字一致，前提是两边读同一套 committed 口径与同一份 `as_of` 数据；任何一边手工改过 JSON，diff 立刻会暴露。
 
 ---
 
@@ -533,7 +553,7 @@ n = ceil(z² × p(1−p) / e²) = ceil(1.96² × 0.25 / 0.05²) = ceil(384.16) =
 - [x] 真实数据 `growth --review` 写出 md + json，含六条门槛、行动、学习卡；
 - [x] 生产 `journal` 摘要为空（不造假数据），临时目录验证 `--add` 与列表；
 - [x] 测试覆盖：缺工件、`blocked`、385 结算、活动窗口/连续天数、里程碑、理由必填、非法动作/置信度、ID 唯一与重复拒绝、看多 hit、看空在上涨市场 miss、观察项不计分、`as_of` 不前视、报告段落、两个 runner 写文件；
-- [ ] 云端部署 + 容器内测试 + 云端实测（见 §7）。
+- [x] 云端部署 + 容器内 254 passed + growth/review/journal/risk/report 实测（见 §7）。
 
 ---
 
