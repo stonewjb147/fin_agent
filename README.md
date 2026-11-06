@@ -13,6 +13,7 @@
 | Phase 2 因子内核（动量 / 反转 / 波动 → IC/ICIR / 多重检验） | 完成 |
 | Phase 3 组合构建 + 结构化信号 + 预测账本 | 完成 |
 | Phase 4 真实回测（T+1 / 成本 / CPCV / DSR / PBO） | 完成 |
+| Phase 1–4 评测与价值记分卡（真实数据验收 + 基准对比 + 成本敏感性） | 完成，见 [`docs/phase1_4_eval.md`](docs/phase1_4_eval.md) |
 | Phase 6 LLM 报告与评测、Phase 7 风控合规、Phase 8~10 成长闭环 | 计划中 |
 
 ## 安装
@@ -54,6 +55,10 @@ python -m finagent.cli backtest --start 2023-01-01 --end 2026-11-05
 python -m finagent.cli backtest --start 2023-01-01 --cost-bps 0      # 无摩擦对照
 python -m finagent.cli backtest --start 2023-01-01 --exec-price open --rebalance-days 21
 
+# Phase 1-4 评测：真实数据验收 + 基准（510300 / 60-40 / 池内等权）+ 成本敏感性 + 分年 IC
+python scripts/phase_eval.py --start 2023-01-01 --end 2026-11-05
+python scripts/phase_eval.py --start 2023-01-01 --end 2026-11-05 --strict   # 硬检查失败即 exit 1
+
 # 每日任务（cron 入口）与飞书告警
 python scripts/collect_daily.py
 python scripts/health_check.py --alert feishu
@@ -72,7 +77,7 @@ docker compose run --rm app python scripts/collect_daily.py
 docker compose run --rm app python scripts/health_check.py --alert feishu
 ```
 
-完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1~3（采集、健康检查、因子报告、信号与预测账本），不含回测与 LLM。cron 五条：18:30 采集、18:40 因子、18:45 信号、19:10 健康检查、周日 03:00 备份。
+完整步骤（购买、防火墙、SSH 加固、时区、Docker、首次回补、cron、备份、回滚）见 [`deploy/tencent-lighthouse.md`](deploy/tencent-lighthouse.md)。云上已部署 Phase 1–4（采集、健康检查、因子报告、信号与预测账本、回测与评测），LLM 报告尚未做。cron 五条：18:30 采集、18:40 因子、18:45 信号、19:10 健康检查、周日 03:00 备份；**回测与 `phase_eval.py` 是按需研究命令，不进 cron**（会占满 CPU 且没有每日新增信息）。
 
 ## 数据源现状（本机实测，2026-11-05）
 
@@ -90,9 +95,9 @@ docker compose run --rm app python scripts/health_check.py --alert feishu
 2. 宏观数据按 `available_at` 过滤（PMI +1 天、CPI/PPI +10 天、M2 +15 天、LPR 当日），不能用统计期。
 3. 指数估值覆盖不全（部分国证/深证指数无免费数据），缺失记为 `NaN + coverage`，不伪造。
 4. ETF 池为当前存续池，存在存续偏差；`configs/universe.yaml` 每月归档一次。
-5. `snapshot_id` 贯穿 data → factors → portfolio → backtest → signals → report，回测只读快照。
+5. 血缘口径：`snapshot_id` 目前由 `collect` 生成、写在 `collect_<date>.json` 与 `data/snapshots/` 下，可用 `finagent.cli snapshot --id ...` 校验 checksum。**它还没有向下游传播**——因子、组合、信号、回测的产物都以 `as_of` 命名并只读 `as_of` 之前的数据，但不记录自己消费的是哪个快照；把 `snapshot_id` 一路传下去是后续项（见 `docs/phase1_4_eval.md` §4）。回测只读 `as_of` 之前的缓存，并有截断重跑校验（`point_in_time`）。
 6. 因子口径：因子值保持原始方向（`direction` 只做解读），IC 是每日截面 Spearman 秩相关；信号 T 日收盘生成、T+1 执行，所以前向收益是 `P(t+1+h)/P(t+1)-1`；重叠收益用 Newey-West（滞后 `max(h-1, 4*(n/100)^(2/9))`）；9 个检验统一做 BH-FDR（q=0.10），不按单因子宣称显著。
-7. 信号与账本口径：合成得分 = 各因子 `z_cs × direction` 的等权均值，**置信度是同向度（|加权和| / 加权绝对值和），不是概率**；每个类别最多 3 条信号，避免整张表被同一风险桶占满；每条信号必须带可机器校验的失效条件（得分翻向、主因子翻向、持有到期）。账本只追加不改写，**结算收益相对等权全池**而不是绝对收益——普涨行情里的多头不算本事。全部信号 `validated=false`，直到 Phase 4 回测给出证据。
+7. 信号与账本口径：合成得分 = 各因子 `z_cs × direction` 的等权均值，**置信度是同向度（|加权和| / 加权绝对值和），不是概率**；每个类别最多 3 条信号，避免整张表被同一风险桶占满；每条信号必须带可机器校验的失效条件（得分翻向、主因子翻向、持有到期）。账本只追加不改写，**结算收益相对等权全池**而不是绝对收益——普涨行情里的多头不算本事。全部信号保持 `validated=false`：Phase 4 已经给出证据，而且是**否定的**——9 个因子检验在 BH-FDR(q=0.10) 下 0 个显著（最高 DSR 0.42），纯因子 Top-10 的盈亏平衡成本只有 3.2bp/边。改成 `true` 需要账本攒够结算样本（±5% 精度约 385 条），不是靠再跑一次回测。详见 `docs/phase1_4_eval.md`。
 8. 组合口径：类别预算固定（宽基 35 / 行业 25 / 跨境 15 / 主题 10 / 债券 10 / 商品 5），类别内按逆波动分配，因子得分只做 `[0.5, 1.5]` 的有界倾斜；单标的 12% 上限，类别上限取 `data/universe.py` 的护栏值。不使用优化器，每个权重都能一句话解释。
 9. 日期口径：所有产物都以 `as_of` 命名，所以 `--date` 落在非交易日会**回退到前一个交易日**并在 stderr 说明；如果那天缓存里还没有数据（例如当天收盘后采集尚未跑），`factor-report` / `signals` / `portfolio` 直接报错退出（exit 1），**绝不**用昨天的数据生成一个标着今天的文件。
 10. 回测口径：引擎按**股数**记账而不是权重算术，所以成交不了的委托不会凭空生效。信号 T 日收盘生成、T+1 成交，默认用收盘价（与预测账本一致），`--exec-price open` 可切到次日开盘；单边成本 = 佣金 2bp + 滑点 5bp（ETF 免印花税），`--cost-bps` 可覆盖。停牌（价格缺失或成交量为 0）不成交；涨停不买、跌停不卖，未成交的权重留在原地等下次再平衡。先卖后买，现金不足以支付买入及其成本时按比例缩量。换手率记为单边（`成交额 / 2 / 前一日净值`），年化后再与成本对照。**读法**：PBO 是「组合内最优策略在样本外落到中位数以下」的频率，纯噪音下按本项目的 ω 口径约为 50%~70%，所以 86% 意味着四个变体之间没有真正的优劣；DSR 用显式 `n_trials`（默认只算本次跑的变体数，是乐观情形，真实试过的方案数应通过 `--trials` 传入）；CPCV 的 5% 分位夏普若显著为负，说明最差路径很痛，不能只看均值。
@@ -110,12 +115,14 @@ finagent/
   portfolio/  # IPS/SAA/TAA/优化/再平衡（K3）
   attribution/# Brinson / 因子归因（K4）
   backtest/   # 回测引擎、成本、CPCV/PBO（Phase 4）
+  evaluation/ # 真实数据验收、基准、成本敏感性、分年 IC、评测汇总
   signals/    # 结构化 QuantSignal、新闻映射（Phase 3/5）
   agent/      # LangGraph、报告、偏差自检（Phase 6）
   evals/      # golden set、引用/数字可追溯/格式指标
 configs/      # universe / catalog / 后续 factors、ips、holdings
+docs/         # 评测报告（phase1_4_eval.md）
 tests/        # 全部离线，不联网
-scripts/      # 每日采集、健康检查、源探测
+scripts/      # 每日采集、健康检查、源探测、Phase 1-4 评测
 ```
 
 ## 评测

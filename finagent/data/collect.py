@@ -8,9 +8,9 @@ recorded as `coverage`, not hidden and not fatal.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 from typing import Literal
 
 import pandas as pd
@@ -242,13 +242,6 @@ def collect(
         result.quality["unavailable"] = coverage_notes(load_catalog())
     except (OSError, ValueError):
         result.quality["unavailable"] = {}
-    quality_path = config.QUALITY_DIR / f"collect_{end.isoformat()}.json"
-    quality_path.write_text(
-        __import__("json").dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
-    result.quality_path = str(quality_path)
-
     if pairs:
         store = SnapshotStore(config.SNAPSHOT_DIR)
         snap = store.build(
@@ -259,5 +252,15 @@ def collect(
             extras={"universe_version": universe.version, "failures": len(result.failures)},
         )
         result.snapshot_id = snap.snapshot_id
+
+    # Written after the snapshot so the report names the lineage it describes;
+    # writing it earlier left `snapshot_id: null` next to a snapshot that did
+    # exist, which reads like the data has no lineage.
+    quality_path = config.QUALITY_DIR / f"collect_{end.isoformat()}.json"
+    quality_path.write_text(
+        json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+    result.quality_path = str(quality_path)
 
     return result

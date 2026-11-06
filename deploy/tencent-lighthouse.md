@@ -1,6 +1,6 @@
 # 腾讯云 Lighthouse 部署 Runbook
 
-目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）与 Phase 3（结构化信号 + 预测账本 + 目标权重），不含回测与 LLM。
+目标：每天收盘后自动采集数据、产出因子报告与结构化信号、检查新鲜度，失败时飞书告警。已部署 Phase 1（采集 + 健康检查）、Phase 2（因子面板 + IC 报告）、Phase 3（结构化信号 + 预测账本 + 目标权重）与 Phase 4（回测 + CPCV/PBO/DSR + `scripts/phase_eval.py` 评测），LLM 报告尚未做。**回测与评测是按需研究命令，不进 cron**——它们没有每日新增信息，还会长时间占满 CPU。
 
 预期耗时：首次 1.5~2 小时，其中镜像构建 2~4 分钟。
 
@@ -8,17 +8,14 @@
 
 ## 0. 本地准备：提交并推送代码
 
-服务器通过 git 拉取代码，当前工作区里的 `finagent/`、`configs/`、`scripts/` 还是未跟踪文件，必须先提交：
+服务器通过 git 拉取代码，所以本地改动必须先提交并推送到 main：
 
 ```bash
 cd /Users/stonewjb/fin_agent_projects
-git add finagent configs scripts tests evals pyproject.toml Makefile README.md \
-        Dockerfile .dockerignore .env.example docker-compose.yml deploy .gitignore
-git commit -m "feat: 部署每日采集管道到腾讯云"
-git push origin main
+git add -A && git commit -m "..." && git push origin main
 ```
 
-确认 `.env`、`data/`、`faiss_index/` 没有进入提交（`.gitignore` 已覆盖）。
+推送前确认 `.env`、`data/` 没有进入提交（`.gitignore` / `.dockerignore` 已覆盖）。**仓库是公开的**，不要提交服务器 IP、密钥或数据文件。
 
 ---
 
@@ -157,11 +154,13 @@ FINAGENT_GID=<上一步的 id -g>
 cd /opt/finagent
 docker compose build                      # 4C8G 约 2~4 分钟
 docker compose run --rm app date          # 必须是 CST +0800
-docker compose run --rm app python -m pytest -q          # 174 passed
+docker compose run --rm app python -m pytest             # 189 passed
 docker compose run --rm app python -m finagent.evals.run_evals --smoke
 ```
 
 构建失败先看内存：`free -h`；4C8G 一般不会 OOM，若曾降配到 2C2G 再补 swap。
+
+> 不要写成 `pytest -q`：`pyproject.toml` 里已有 `addopts = "-q"`，再加一个 `-q` 会变成 `-qq`，**汇总行（`189 passed`）会被吞掉**，只剩一屏点，看起来像没跑完。用 `pytest` 或 `pytest -q --no-header -rN`。
 
 ---
 
@@ -208,6 +207,10 @@ docker compose run --rm app python -m finagent.cli ledger --date 2026-11-05
 docker compose run --rm app python -m finagent.cli backtest --start 2023-01-01
 # 实测：四个对照策略 + PBO/CPCV/DSR，约 30 秒，产出 data/reports/backtest_<date>.json|_daily.csv|_fills.csv
 # 回测不进 cron：它是研究工具，数据变了重新跑一次即可
+
+docker compose run --rm app python scripts/phase_eval.py --start 2023-01-01 --end 2026-11-05
+# 实测：26/26 硬检查通过 + 价值表 + 成本敏感性 + 分年 IC + 账本状态；本机 95 秒（单核为主）
+# 产出 data/quality/phase_eval_<date>.json；云端数字应与本地逐位一致（同一缓存、同一引擎）
 ```
 
 验证飞书（这一步会真的发一条消息）：
@@ -299,7 +302,7 @@ df -h /; docker system df
 cd /opt/finagent
 git pull
 docker compose build
-docker compose run --rm app python -m pytest -q     # 通过再等下一次 cron
+docker compose run --rm app python -m pytest        # 通过再等下一次 cron
 ```
 
 回滚：

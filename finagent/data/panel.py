@@ -19,14 +19,15 @@ def as_date(value: date | str | pd.Timestamp) -> date:
 
 
 def slice_as_of(df: pd.DataFrame, as_of: date | str, date_col: str = "date") -> pd.DataFrame:
-    """Keep rows with date <= as_of. Raises if a future row slips in."""
+    """Keep rows with date <= as_of.
+
+    Dropping future rows is the whole point of a point-in-time slice, so it is
+    silent here. Callers that must prove no leak happened (e.g.
+    `backtest.data.load_price_panels`) assert on the returned index themselves.
+    """
     cutoff = pd.Timestamp(as_date(as_of))
     dates = pd.to_datetime(df[date_col])
-    out = df.loc[dates <= cutoff].copy()
-    if len(out) != len(df):
-        # Caller asked for a PIT slice; dropping future rows is expected.
-        pass
-    return out
+    return df.loc[dates <= cutoff].copy()
 
 
 def long_to_wide(df: pd.DataFrame, value: str, date_col: str = "date", symbol_col: str = "symbol") -> pd.DataFrame:
