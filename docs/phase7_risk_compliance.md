@@ -5,7 +5,8 @@ Phase 7 把「这份组合能不能这样持有」从一句主观判断，变成
 只在研究报告和产物层面加一道硬边界。
 
 > Phase 6 的报告链路见 [`phase6_llm_report.md`](phase6_llm_report.md) 与
-> [`phase6_manual.md`](phase6_manual.md)。
+> [`phase6_manual.md`](phase6_manual.md)。本阶段的运行、审计与练习见
+> [`phase7_manual.md`](phase7_manual.md)。
 
 ## 0. 一页结论
 

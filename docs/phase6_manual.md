@@ -53,7 +53,8 @@ data/reports/report_<as_of>.json   # 证据、门禁结果、回退原因，机�
 python -m finagent.cli collect --start 2022-01-01   # 18:30
 python -m finagent.cli factor-report                # 18:40
 python -m finagent.cli signals                      # 18:45
-python -m finagent.cli portfolio                    # 按需；cron 默认不跑
+python -m finagent.cli portfolio                    # 18:47；写目标权重
+python -m finagent.cli risk                         # 18:48；风控判决
 python -m finagent.cli report                       # 18:50
 ```
 
@@ -477,7 +478,7 @@ MIN_CITATIONS = 10
 - [ ] `numeric_strict.untraceable == []`
 - [ ] JSON 里没有 key、没有明文密钥字段
 - [ ] 云端 `report` 与本地口径一致（同证据表、同门禁）
-- [ ] cron 顺序正确（18:30 → 18:40 → 18:45 → 18:50 → 19:10）
+- [ ] cron 顺序正确（18:30 → 18:40 → 18:45 → 18:47 → 18:48 → 18:50 → 19:10）
 
 ---
 
